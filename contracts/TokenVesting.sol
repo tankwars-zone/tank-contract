@@ -62,8 +62,6 @@ contract TokenVesting is Ownable {
 
         require(cliffDuration > 0 && cliffDuration <= duration, "TokenVesting: cliff duration is longer than duration");
 
-        require(duration > 0, "TokenVesting: duration is invalid");
-
         require(startTime + duration > block.timestamp, "TokenVesting: final time is before current time");
 
         _pools[poolId] = Pool(startTime, cliffDuration, duration, 0);
