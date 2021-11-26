@@ -1,12 +1,30 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
+import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 
-contract TGold is ERC20PresetFixedSupply {
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 
-    constructor(string memory name, string memory symbol, uint256 initialSupply)
-        ERC20PresetFixedSupply(name, symbol, initialSupply, _msgSender())
-    {}
+contract TGold is AccessControlEnumerable, ERC20Burnable {
+
+    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+
+    constructor(string memory name, string memory symbol)
+        ERC20(name, symbol)
+    {
+        address msgSender = _msgSender();
+
+        _setupRole(DEFAULT_ADMIN_ROLE, msgSender);
+
+        _setupRole(MINTER_ROLE, msgSender);
+    }
+
+    function mint(address to, uint256 amount)
+        public
+    {
+        require(hasRole(MINTER_ROLE, _msgSender()), "TGold: must have minter role to mint");
+
+        _mint(to, amount);
+    }
 
 }
