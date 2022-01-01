@@ -96,7 +96,7 @@ contract TokenVesting is Ownable {
     {
         uint256 length = accounts.length;
 
-        require(length > 0 && length == amounts.length, "LockToken: array length is invalid"); 
+        require(length > 0 && length == amounts.length, "TokenVesting: array length is invalid"); 
 
         uint256 total = 0;
 
