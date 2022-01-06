@@ -6,23 +6,26 @@ import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 
-import "./libs/Signature.sol";
+import "./../libs/Signature.sol";
 
-contract NFT is AccessControlEnumerable, ERC721Enumerable, ERC721Burnable  {
+contract Tank is AccessControlEnumerable, ERC721Enumerable, ERC721Burnable  {
 
     using Signature for bytes32;
 
-    event BaseURIChanged(string baseTokenURI);
+    event BaseURIChanged(string uri);
 
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant SIGNER_ROLE = keccak256("SIGNER_ROLE");
 
-    string private _baseTokenURI;
+    string private _uri;
+
+    uint256 private _chainId;
 
     mapping(uint256 => bool) public nonces;
 
-    constructor(string memory name, string memory symbol, string memory baseTokenURI) ERC721(name, symbol) {
-        _baseTokenURI = baseTokenURI;
+    constructor(string memory name, string memory symbol, string memory uri, uint256 chainId) ERC721(name, symbol) {
+        _uri = uri;
+        _chainId = chainId;
 
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
 
@@ -30,30 +33,30 @@ contract NFT is AccessControlEnumerable, ERC721Enumerable, ERC721Burnable  {
         _setupRole(SIGNER_ROLE, _msgSender());
     }
 
-    function setBaseURI(string memory baseTokenURI) public virtual {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "NFT: must have admin role to set");
+    function setBaseURI(string memory uri) public virtual {
+        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Tank: must have admin role to set");
 
-        require(bytes(baseTokenURI).length > 0, "NFT: baseTokenURI is invalid");
+        require(bytes(uri).length > 0, "Tank: uri is invalid");
 
-        _baseTokenURI = baseTokenURI;
+        _uri = uri;
 
-        emit BaseURIChanged(baseTokenURI);
+        emit BaseURIChanged(uri);
     }
 
     function mint(uint256 tokenId, address to) public virtual {
-        require(hasRole(MINTER_ROLE, _msgSender()), "NFT: must have minter role to mint");
+        require(hasRole(MINTER_ROLE, _msgSender()), "Tank: must have minter role to mint");
 
         _mint(to, tokenId);
     }
 
     function mint(uint256 tokenId, bytes memory signature) public virtual {
-        require(!nonces[tokenId], "NFT: nonce was used");
+        require(!nonces[tokenId], "Tank: nonce was used");
 
         address msgSender = _msgSender();
 
-        bytes32 message = keccak256(abi.encodePacked(tokenId, msgSender, this)).prefixed();
+        bytes32 message = keccak256(abi.encodePacked(tokenId, msgSender, _chainId, this)).prefixed();
 
-        require(hasRole(SIGNER_ROLE, message.recoverSigner(signature)), "NFT: signature is invalid");
+        require(hasRole(SIGNER_ROLE, message.recoverSigner(signature)), "Tank: signature is invalid");
 
         nonces[tokenId] = true;
 
@@ -61,11 +64,11 @@ contract NFT is AccessControlEnumerable, ERC721Enumerable, ERC721Burnable  {
     }
 
     function mintBatch(uint256[] memory tokenIds, address[] memory accounts) public virtual {
-        require(hasRole(MINTER_ROLE, _msgSender()), "NFT: must have minter role to mint");
+        require(hasRole(MINTER_ROLE, _msgSender()), "Tank: must have minter role to mint");
 
         uint256 length = tokenIds.length;
 
-        require(length > 0 && length == accounts.length, "NFT: array length is invalid");
+        require(length > 0 && length == accounts.length, "Tank: array length is invalid");
 
         for (uint256 i = 0; i < length; i++) {
             _mint(accounts[i], tokenIds[i]);
@@ -73,7 +76,7 @@ contract NFT is AccessControlEnumerable, ERC721Enumerable, ERC721Burnable  {
     }
 
     function _baseURI() internal view virtual override returns (string memory) {
-        return _baseTokenURI;
+        return _uri;
     }
 
     function _beforeTokenTransfer(address from, address to, uint256 tokenId) internal virtual override(ERC721, ERC721Enumerable) {
