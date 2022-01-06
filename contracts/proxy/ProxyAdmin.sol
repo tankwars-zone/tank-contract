@@ -995,4 +995,3 @@ contract ProxyAdmin is Ownable {
         proxy.upgradeToAndCall{value: msg.value}(implementation, data);
     }
 }
-
