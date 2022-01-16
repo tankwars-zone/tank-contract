@@ -14,7 +14,7 @@ contract Tank is AccessControlEnumerable, ERC721Enumerable, ERC721Burnable  {
 
     string private _uri;
 
-    uint256 private _ids;
+    uint256 public currentId;
 
     constructor(string memory name, string memory symbol, string memory uri) ERC721(name, symbol) {
         _uri = uri;
@@ -37,7 +37,7 @@ contract Tank is AccessControlEnumerable, ERC721Enumerable, ERC721Burnable  {
     function mint(address to) public virtual {
         require(hasRole(MINTER_ROLE, _msgSender()), "Tank: must have minter role to mint");
 
-        _mint(to, ++_ids);
+        _mint(to, ++currentId);
     }
 
     function mintBatch(address[] memory accounts) public virtual {
@@ -47,13 +47,13 @@ contract Tank is AccessControlEnumerable, ERC721Enumerable, ERC721Burnable  {
 
         require(length > 0, "Tank: array length is invalid");
 
-        uint256 id = _ids;
+        uint256 id = currentId;
 
         for (uint256 i = 0; i < length; i++) {
             _mint(accounts[i], ++id);
         }
 
-        _ids = id;
+        currentId = id;
     }
 
     function _baseURI() internal view virtual override returns (string memory) {
