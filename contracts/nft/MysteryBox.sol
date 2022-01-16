@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 
-contract Tank is AccessControlEnumerable, ERC721Enumerable, ERC721Burnable  {
+contract MysteryBox is AccessControlEnumerable, ERC721Enumerable, ERC721Burnable  {
 
     event BaseURIChanged(string uri);
 
@@ -25,9 +25,9 @@ contract Tank is AccessControlEnumerable, ERC721Enumerable, ERC721Burnable  {
     }
 
     function setBaseURI(string memory uri) public virtual {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Tank: must have admin role to set");
+        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "MysteryBox: must have admin role to set");
 
-        require(bytes(uri).length > 0, "Tank: uri is invalid");
+        require(bytes(uri).length > 0, "MysteryBox: uri is invalid");
 
         _uri = uri;
 
@@ -35,17 +35,17 @@ contract Tank is AccessControlEnumerable, ERC721Enumerable, ERC721Burnable  {
     }
 
     function mint(address to) public virtual {
-        require(hasRole(MINTER_ROLE, _msgSender()), "Tank: must have minter role to mint");
+        require(hasRole(MINTER_ROLE, _msgSender()), "MysteryBox: must have minter role to mint");
 
         _mint(to, ++_ids);
     }
 
     function mintBatch(address[] memory accounts) public virtual {
-        require(hasRole(MINTER_ROLE, _msgSender()), "Tank: must have minter role to mint");
+        require(hasRole(MINTER_ROLE, _msgSender()), "MysteryBox: must have minter role to mint");
 
         uint256 length = accounts.length;
 
-        require(length > 0, "Tank: array length is invalid");
+        require(length > 0, "MysteryBox: array length is invalid");
 
         uint256 id = _ids;
 
