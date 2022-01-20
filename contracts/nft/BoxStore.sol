@@ -25,8 +25,9 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
     event AdminWalletUpdated(address wallet);
-    event RoundUpdated(uint256 roundId, uint256 boxPrice, uint256 totalBoxes, uint256 startSaleAt, uint256 endSaleAt, uint256 numBoxesPerAccount);
+    event RoundUpdated(uint256 roundId, uint256 boxPrice, uint256 totalBoxes, uint256 startPrivateSaleAt, uint256 endPrivateSaleAt, uint256 startPublicSaleAt, uint256 endPublicSaleAt, uint256 numBoxesPerAccount);
     event OpenBoxTimeUpdated(uint256 time);
+    event WhitelistUpdated(address[] users, bool status);
     event BoxBought(address user, uint256 boxPrice, uint256 boxIdFrom, uint256 boxIdTo);
     event BoxOpened(address user, uint256 boxId, uint256 tankId);
 
@@ -40,8 +41,10 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
         uint256 boxPrice;
         uint256 totalBoxes;
         uint256 totalBoxesSold;
-        uint256 startSaleAt;
-        uint256 endSaleAt;
+        uint256 startPrivateSaleAt;
+        uint256 endPrivateSaleAt;
+        uint256 startPublicSaleAt;
+        uint256 endPublicSaleAt;
         uint256 numBoxesPerAccount;
     }
 
@@ -50,6 +53,8 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
 
     // round id => user address => number of boxes that user bought
     mapping(uint256 => mapping(address => uint256)) public numBoxesBought;
+
+    mapping(address => bool) public isInWhitelist;
 
     uint256 public openBoxAt;
 
@@ -83,7 +88,7 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
         emit AdminWalletUpdated(wallet);
     }
 
-    function setRound(uint256 roundId, uint256 boxPrice, uint256 totalBoxes, uint256 startSaleAt, uint256 endSaleAt, uint256 numBoxesPerAccount)
+    function setRound(uint256 roundId, uint256 boxPrice, uint256 totalBoxes, uint256 startPrivateSaleAt, uint256 endPrivateSaleAt, uint256 startPublicSaleAt, uint256 endPublicSaleAt, uint256 numBoxesPerAccount)
         public
         onlyOperator
     {
@@ -97,12 +102,20 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
             round.totalBoxes = totalBoxes;
         }
 
-        if (round.startSaleAt != startSaleAt) {
-            round.startSaleAt = startSaleAt;
+        if (round.startPrivateSaleAt != startPrivateSaleAt) {
+            round.startPrivateSaleAt = startPrivateSaleAt;
         }
 
-        if (round.endSaleAt != endSaleAt) {
-            round.endSaleAt = endSaleAt;
+        if (round.endPrivateSaleAt != endPrivateSaleAt) {
+            round.endPrivateSaleAt = endPrivateSaleAt;
+        }
+
+        if (round.startPublicSaleAt != startPublicSaleAt) {
+            round.startPublicSaleAt = startPublicSaleAt;
+        }
+
+        if (round.endPublicSaleAt != endPublicSaleAt) {
+            round.endPublicSaleAt = endPublicSaleAt;
         }
 
         if (round.numBoxesPerAccount != numBoxesPerAccount) {
@@ -111,7 +124,9 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
 
         require(round.totalBoxes >= round.totalBoxesSold, "BoxStore: total supply must be greater or equal than total sold");
 
-        emit RoundUpdated(roundId, boxPrice, totalBoxes, startSaleAt, endSaleAt, numBoxesPerAccount);
+        require(round.startPrivateSaleAt < round.endPrivateSaleAt && round.startPublicSaleAt < round.endPublicSaleAt, "BoxStore: time is invalid");
+
+        emit RoundUpdated(roundId, boxPrice, totalBoxes, startPrivateSaleAt, endPrivateSaleAt, startPublicSaleAt, endPublicSaleAt, numBoxesPerAccount);
     }
 
     function setOpenBoxTime(uint256 time)
@@ -123,10 +138,51 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
         emit OpenBoxTimeUpdated(time);
     }
 
-    function buyBox(uint256 roundId, uint256 quantity)
+    function setWhitelist(address[] memory accounts, bool status)
+        external
+        onlyOperator
+    {
+        uint256 length = accounts.length;
+
+        require(length > 0, "BoxStore: array length is invalid");
+
+        for (uint256 i = 0; i < length; i++) {
+            address account = accounts[i];
+
+            isInWhitelist[account] = status;
+        }
+
+        emit WhitelistUpdated(accounts, status);
+    }
+
+    function buyBoxInPrivateSale(uint256 roundId, uint256 quantity)
         public
         payable
         nonReentrant
+    {
+        Round memory round = rounds[roundId];
+
+        require(round.startPrivateSaleAt <= block.timestamp && block.timestamp < round.endPrivateSaleAt, "BoxStore: can not buy");
+
+        require(isInWhitelist[_msgSender()], "BoxStore: caller is not in whitelist");
+
+        _buyBox(roundId, quantity, msg.value);
+    }
+
+    function buyBoxInPublicSale(uint256 roundId, uint256 quantity)
+        public
+        payable
+        nonReentrant
+    {
+        Round memory round = rounds[roundId];
+
+        require(round.startPublicSaleAt <= block.timestamp && block.timestamp < round.endPublicSaleAt, "BoxStore: can not buy");
+
+        _buyBox(roundId, quantity, msg.value);
+    }
+
+    function _buyBox(uint256 roundId, uint256 quantity, uint256 deposit)
+        internal
     {
         require(quantity > 0, "BoxStore: quantity is invalid");
 
@@ -134,11 +190,9 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
 
         require(round.boxPrice > 0, "BoxStore: round id does not exist");
 
-        require(msg.value == quantity * round.boxPrice, "BoxStore: deposit amount is invalid");
+        require(deposit == quantity * round.boxPrice, "BoxStore: deposit amount is invalid");
 
         require(round.totalBoxesSold + quantity <= round.totalBoxes, "BoxStore: can not sell over limitation per round");
-
-        require(round.startSaleAt <= block.timestamp && block.timestamp < round.endSaleAt, "BoxStore: can not buy");
 
         address msgSender = _msgSender();
 
