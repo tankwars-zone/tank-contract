@@ -3,13 +3,14 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./libs/Signature.sol";
 
 interface ITGlod {
     function mint(address to, uint256 amount) external;
 }
 
-contract RewardManagement is AccessControlEnumerable {
+contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
     using SafeMath for uint256;
     using SafeMath for uint32;
     using Signature for bytes32;
@@ -105,7 +106,7 @@ contract RewardManagement is AccessControlEnumerable {
         uint256 timestamp,
         string memory claimId,
         bytes calldata signature
-    ) external {
+    ) external nonReentrant {
         require(
             (block.timestamp - timestamp) <= _expiredTime,
             "RewardManagement: Transaction Expired"
