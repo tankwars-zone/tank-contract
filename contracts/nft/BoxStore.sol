@@ -2,8 +2,9 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
-
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface IMysterBox {
     function burn(uint256 tokenId) external;
@@ -20,6 +21,7 @@ interface ITank {
 }
 
 contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
+    using SafeERC20 for IERC20;
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
     event AdminWalletUpdated(address wallet);
@@ -46,6 +48,8 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
     IMysterBox public boxContract;
 
     ITank public tankContract;
+
+    IERC20 public wbondContract;
 
     address public adminWallet;
 
@@ -89,12 +93,13 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
     constructor(
         IMysterBox box,
         ITank tank,
+        IERC20 wbond,
         address wallet
     ) {
         boxContract = box;
         tankContract = tank;
         adminWallet = wallet;
-
+        wbondContract = wbond;
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _setupRole(OPERATOR_ROLE, _msgSender());
     }
@@ -195,7 +200,6 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
 
     function buyBoxInPrivateSale(uint256 roundId, uint256 quantity)
         public
-        payable
         nonReentrant
     {
         Round memory round = rounds[roundId];
@@ -211,12 +215,11 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
             "BoxStore: caller is not in whitelist"
         );
 
-        _buyBox(roundId, quantity, msg.value);
+        _buyBox(roundId, quantity);
     }
 
     function buyBoxInPublicSale(uint256 roundId, uint256 quantity)
         public
-        payable
         nonReentrant
     {
         Round memory round = rounds[roundId];
@@ -227,14 +230,10 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
             "BoxStore: can not buy"
         );
 
-        _buyBox(roundId, quantity, msg.value);
+        _buyBox(roundId, quantity);
     }
 
-    function _buyBox(
-        uint256 roundId,
-        uint256 quantity,
-        uint256 deposit
-    ) internal {
+    function _buyBox(uint256 roundId, uint256 quantity) internal {
         require(quantity > 0, "BoxStore: quantity is invalid");
 
         Round storage round = rounds[roundId];
@@ -242,14 +241,11 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
         require(round.boxPrice > 0, "BoxStore: round id does not exist");
 
         require(
-            deposit == quantity * round.boxPrice,
-            "BoxStore: deposit amount is invalid"
-        );
-
-        require(
             round.totalBoxesSold + quantity <= round.totalBoxes,
             "BoxStore: can not sell over limitation per round"
         );
+
+        uint256 amount = quantity * round.boxPrice;
 
         address msgSender = _msgSender();
 
@@ -270,6 +266,8 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
         round.totalBoxesSold += quantity;
 
         numBoxesBought[roundId][msgSender] += quantity;
+
+        wbondContract.safeTransferFrom(msg.sender, adminWallet, amount);
 
         uint256 currentId = boxContract.currentId();
 
