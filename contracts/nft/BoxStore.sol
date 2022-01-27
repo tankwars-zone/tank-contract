@@ -6,29 +6,41 @@ import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 interface IMysterBox {
-
     function burn(uint256 tokenId) external;
-    function mintBatch(address[] memory accounts) external;
-    function currentId() external view returns (uint256);
 
+    function mintBatch(address[] memory accounts) external;
+
+    function currentId() external view returns (uint256);
 }
 
 interface ITank {
-
     function mint(address account) external;
-    function currentId() external view returns (uint256);
 
+    function currentId() external view returns (uint256);
 }
 
 contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
-
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
     event AdminWalletUpdated(address wallet);
-    event RoundUpdated(uint256 roundId, uint256 boxPrice, uint256 totalBoxes, uint256 startPrivateSaleAt, uint256 endPrivateSaleAt, uint256 startPublicSaleAt, uint256 endPublicSaleAt, uint256 numBoxesPerAccount);
+    event RoundUpdated(
+        uint256 roundId,
+        uint256 boxPrice,
+        uint256 totalBoxes,
+        uint256 startPrivateSaleAt,
+        uint256 endPrivateSaleAt,
+        uint256 startPublicSaleAt,
+        uint256 endPublicSaleAt,
+        uint256 numBoxesPerAccount
+    );
     event OpenBoxTimeUpdated(uint256 time);
     event WhitelistUpdated(address[] users, bool status);
-    event BoxBought(address user, uint256 boxPrice, uint256 boxIdFrom, uint256 boxIdTo);
+    event BoxBought(
+        address user,
+        uint256 boxPrice,
+        uint256 boxIdFrom,
+        uint256 boxIdTo
+    );
     event BoxOpened(address user, uint256 boxId, uint256 tankId);
 
     IMysterBox public boxContract;
@@ -59,16 +71,26 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
     uint256 public openBoxAt;
 
     modifier onlyAdmin() {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "BoxStore: must have admin role to call");
+        require(
+            hasRole(DEFAULT_ADMIN_ROLE, _msgSender()),
+            "BoxStore: must have admin role to call"
+        );
         _;
     }
 
     modifier onlyOperator() {
-        require(hasRole(OPERATOR_ROLE, _msgSender()), "BoxStore: must have operator role to call");
+        require(
+            hasRole(OPERATOR_ROLE, _msgSender()),
+            "BoxStore: must have operator role to call"
+        );
         _;
     }
 
-    constructor(IMysterBox box, ITank tank, address wallet) {
+    constructor(
+        IMysterBox box,
+        ITank tank,
+        address wallet
+    ) {
         boxContract = box;
         tankContract = tank;
         adminWallet = wallet;
@@ -77,10 +99,7 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
         _setupRole(OPERATOR_ROLE, _msgSender());
     }
 
-    function setAdminWallet(address wallet)
-        public
-        onlyAdmin
-    {
+    function setAdminWallet(address wallet) public onlyAdmin {
         require(wallet != address(0), "BoxStore: address is invalid");
 
         adminWallet = wallet;
@@ -88,10 +107,16 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
         emit AdminWalletUpdated(wallet);
     }
 
-    function setRound(uint256 roundId, uint256 boxPrice, uint256 totalBoxes, uint256 startPrivateSaleAt, uint256 endPrivateSaleAt, uint256 startPublicSaleAt, uint256 endPublicSaleAt, uint256 numBoxesPerAccount)
-        public
-        onlyOperator
-    {
+    function setRound(
+        uint256 roundId,
+        uint256 boxPrice,
+        uint256 totalBoxes,
+        uint256 startPrivateSaleAt,
+        uint256 endPrivateSaleAt,
+        uint256 startPublicSaleAt,
+        uint256 endPublicSaleAt,
+        uint256 numBoxesPerAccount
+    ) public onlyOperator {
         Round storage round = rounds[roundId];
 
         if (round.boxPrice != boxPrice) {
@@ -122,17 +147,30 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
             round.numBoxesPerAccount = numBoxesPerAccount;
         }
 
-        require(round.totalBoxes >= round.totalBoxesSold, "BoxStore: total supply must be greater or equal than total sold");
+        require(
+            round.totalBoxes >= round.totalBoxesSold,
+            "BoxStore: total supply must be greater or equal than total sold"
+        );
 
-        require(round.startPrivateSaleAt < round.endPrivateSaleAt && round.startPublicSaleAt < round.endPublicSaleAt, "BoxStore: time is invalid");
+        require(
+            round.startPrivateSaleAt < round.endPrivateSaleAt &&
+                round.startPublicSaleAt < round.endPublicSaleAt,
+            "BoxStore: time is invalid"
+        );
 
-        emit RoundUpdated(roundId, boxPrice, totalBoxes, startPrivateSaleAt, endPrivateSaleAt, startPublicSaleAt, endPublicSaleAt, numBoxesPerAccount);
+        emit RoundUpdated(
+            roundId,
+            boxPrice,
+            totalBoxes,
+            startPrivateSaleAt,
+            endPrivateSaleAt,
+            startPublicSaleAt,
+            endPublicSaleAt,
+            numBoxesPerAccount
+        );
     }
 
-    function setOpenBoxTime(uint256 time)
-        public
-        onlyOperator
-    {
+    function setOpenBoxTime(uint256 time) public onlyOperator {
         openBoxAt = time;
 
         emit OpenBoxTimeUpdated(time);
@@ -162,9 +200,16 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
     {
         Round memory round = rounds[roundId];
 
-        require(round.startPrivateSaleAt <= block.timestamp && block.timestamp < round.endPrivateSaleAt, "BoxStore: can not buy");
+        require(
+            round.startPrivateSaleAt <= block.timestamp &&
+                block.timestamp < round.endPrivateSaleAt,
+            "BoxStore: can not buy"
+        );
 
-        require(isInWhitelist[_msgSender()], "BoxStore: caller is not in whitelist");
+        require(
+            isInWhitelist[_msgSender()],
+            "BoxStore: caller is not in whitelist"
+        );
 
         _buyBox(roundId, quantity, msg.value);
     }
@@ -176,27 +221,43 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
     {
         Round memory round = rounds[roundId];
 
-        require(round.startPublicSaleAt <= block.timestamp && block.timestamp < round.endPublicSaleAt, "BoxStore: can not buy");
+        require(
+            round.startPublicSaleAt <= block.timestamp &&
+                block.timestamp < round.endPublicSaleAt,
+            "BoxStore: can not buy"
+        );
 
         _buyBox(roundId, quantity, msg.value);
     }
 
-    function _buyBox(uint256 roundId, uint256 quantity, uint256 deposit)
-        internal
-    {
+    function _buyBox(
+        uint256 roundId,
+        uint256 quantity,
+        uint256 deposit
+    ) internal {
         require(quantity > 0, "BoxStore: quantity is invalid");
 
         Round storage round = rounds[roundId];
 
         require(round.boxPrice > 0, "BoxStore: round id does not exist");
 
-        require(deposit == quantity * round.boxPrice, "BoxStore: deposit amount is invalid");
+        require(
+            deposit == quantity * round.boxPrice,
+            "BoxStore: deposit amount is invalid"
+        );
 
-        require(round.totalBoxesSold + quantity <= round.totalBoxes, "BoxStore: can not sell over limitation per round");
+        require(
+            round.totalBoxesSold + quantity <= round.totalBoxes,
+            "BoxStore: can not sell over limitation per round"
+        );
 
         address msgSender = _msgSender();
 
-        require(numBoxesBought[roundId][msgSender] + quantity <= round.numBoxesPerAccount, "BoxStore: can not sell over limitation per account");
+        require(
+            numBoxesBought[roundId][msgSender] + quantity <=
+                round.numBoxesPerAccount,
+            "BoxStore: can not sell over limitation per account"
+        );
 
         address[] memory accounts = new address[](quantity);
 
@@ -212,15 +273,24 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
 
         uint256 currentId = boxContract.currentId();
 
-        emit BoxBought(msgSender, round.boxPrice, currentId - quantity + 1, currentId);
+        emit BoxBought(
+            msgSender,
+            round.boxPrice,
+            currentId - quantity + 1,
+            currentId
+        );
     }
 
-    function onERC721Received(address, address user, uint256 boxId, bytes calldata)
-        public
-        nonReentrant
-        returns (bytes4)
-    {
-        require(address(boxContract) == _msgSender(), "BoxStore: caller is not box contract");
+    function onERC721Received(
+        address,
+        address user,
+        uint256 boxId,
+        bytes calldata
+    ) public nonReentrant returns (bytes4) {
+        require(
+            address(boxContract) == _msgSender(),
+            "BoxStore: caller is not box contract"
+        );
 
         require(openBoxAt <= block.timestamp, "BoxStore: can not open");
 
@@ -232,5 +302,4 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
 
         return this.onERC721Received.selector;
     }
-
 }
