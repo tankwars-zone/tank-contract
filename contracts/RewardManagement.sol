@@ -18,6 +18,7 @@ contract RewardManagement is AccessControlEnumerable {
 
     uint256 public constant SECOND_PER_DATE = 86400;
     bytes32 public constant SIGNER_ROLE = keccak256("SIGNER_ROLE");
+    bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
     ITGlod tglod;
     uint256 private _expiredTime = 300;
@@ -37,10 +38,10 @@ contract RewardManagement is AccessControlEnumerable {
         _;
     }
 
-    modifier onlySigner() {
+    modifier onlyOperator() {
         require(
             hasRole(SIGNER_ROLE, _msgSender()),
-            "RewardManagement: Must Have Signer Role"
+            "RewardManagement: Must Have Operator Role"
         );
         _;
     }
@@ -64,6 +65,7 @@ contract RewardManagement is AccessControlEnumerable {
         quotaClaim = _quotaClaim;
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _setupRole(SIGNER_ROLE, _msgSender());
+        _setupRole(OPERATOR_ROLE, _msgSender());
     }
 
     function setTgold(ITGlod _tglod)
@@ -74,35 +76,27 @@ contract RewardManagement is AccessControlEnumerable {
         tglod = _tglod;
     }
 
-    function addSigner(address signer) external onlyAdmin notNull(signer) {
-        grantRole(SIGNER_ROLE, signer);
-    }
-
-    function removeSigner(address signer) external onlyAdmin notNull(signer) {
-        revokeRole(SIGNER_ROLE, signer);
-    }
-
-    function setQuotaMintPerDate(uint256 amount) external onlyAdmin {
+    function setQuotaMintPerDate(uint256 amount) external onlyOperator {
         require(amount > 0, "RewardManagement: Amount Invalid");
         quotaUserMintPerDate = amount;
     }
 
-    function setQuotaUserMintPerDate(uint256 amount) external onlyAdmin {
+    function setQuotaUserMintPerDate(uint256 amount) external onlyOperator {
         require(amount > 0, "RewardManagement: Amount Invalid");
         quotaUserMintPerDate = amount;
     }
 
-    function setQuotaClaim(uint256 amount) external onlyAdmin {
+    function setQuotaClaim(uint256 amount) external onlyOperator {
         require(amount > 0, "RewardManagement: Amount Invalid");
         quotaClaim = amount;
     }
 
-    function setExpiredTime(uint256 expiredTime) external onlyAdmin {
+    function setExpiredTime(uint256 expiredTime) external onlyOperator {
         require(expiredTime > 0, "RewardManagement: ExpiredTime Invalid");
         _expiredTime = expiredTime;
     }
 
-    function setVerifyQuota(bool status) external onlyAdmin {
+    function setVerifyQuota(bool status) external onlyOperator {
         verifyQuota = status;
     }
 
