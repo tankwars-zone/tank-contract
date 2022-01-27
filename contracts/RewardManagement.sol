@@ -26,6 +26,7 @@ contract RewardManagement is AccessControlEnumerable {
     mapping(string => bool) private _claimId;
     uint256 public quotaMintPerDate;
     uint256 public quotaUserMintPerDate;
+    uint256 public quotaClaim;
     bool public verifyQuota;
 
     modifier onlyAdmin() {
@@ -53,12 +54,14 @@ contract RewardManagement is AccessControlEnumerable {
         ITGlod _tglod,
         uint256 _quotaMintPerDate,
         uint256 _quotaUserMintPerDate,
+        uint256 _quotaClaim,
         bool _verifyQuota
     ) {
         tglod = _tglod;
         quotaMintPerDate = _quotaMintPerDate;
         quotaUserMintPerDate = _quotaUserMintPerDate;
         verifyQuota = _verifyQuota;
+        quotaClaim = _quotaClaim;
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _setupRole(SIGNER_ROLE, _msgSender());
     }
@@ -87,6 +90,11 @@ contract RewardManagement is AccessControlEnumerable {
     function setQuotaUserMintPerDate(uint256 amount) external onlyAdmin {
         require(amount > 0, "RewardManagement: Amount Invalid");
         quotaUserMintPerDate = amount;
+    }
+
+    function setQuotaClaim(uint256 amount) external onlyAdmin {
+        require(amount > 0, "RewardManagement: Amount Invalid");
+        quotaClaim = amount;
     }
 
     function setExpiredTime(uint256 expiredTime) external onlyAdmin {
@@ -138,6 +146,21 @@ contract RewardManagement is AccessControlEnumerable {
         _claimId[claimId] = true;
         tglod.mint(_msgSender(), amount);
         emit ClaimReward(_msgSender(), amount, claimId);
+    }
+
+    function getRemainQuota() external view returns (uint256) {
+        uint32 date = _getCurrentDate();
+        return quotaMintPerDate - _dateQuota[date];
+    }
+
+    function getUserRemainQuota(address _address)
+        external
+        view
+        notNull(_address)
+        returns (uint256)
+    {
+        uint32 date = _getCurrentDate();
+        return quotaUserMintPerDate - _userQuota[_address][date];
     }
 
     function _getCurrentDate() internal view returns (uint32) {
