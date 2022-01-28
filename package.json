@@ -6,7 +6,7 @@
     "compile": "truffle compile",
     "test": "truffle test",
     "deploy": "truffle migrate --reset --network production",
-    "flat:BoxStore": "npx hardhat flatten ./contracts/nft/BoxStore.sol  | awk '/SPDX-License-Identifier/&&c++>0 {next} 1' | awk '/pragma experimental ABIEncoderV2;/&&c++>0 {next} 1' > publish/BoxStore.flat.sol"
+    "flat:BoxStore": "npx truffle-flattener ./contracts/nft/BoxStore.sol  | awk '/SPDX-License-Identifier/&&c++>0 {next} 1' | awk '/pragma experimental ABIEncoderV2;/&&c++>0 {next} 1' > publish/BoxStore.flat.sol"
   },
   "repository": {
     "type": "git",

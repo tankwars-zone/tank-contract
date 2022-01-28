@@ -3,7 +3,6 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface IMysterBox {
@@ -21,7 +20,6 @@ interface ITank {
 }
 
 contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
-    using SafeERC20 for IERC20;
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
     event AdminWalletUpdated(address wallet);
@@ -267,7 +265,7 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
 
         numBoxesBought[roundId][msgSender] += quantity;
 
-        wbondContract.safeTransferFrom(msg.sender, adminWallet, amount);
+        wbondContract.transferFrom(msg.sender, adminWallet, amount);
 
         uint256 currentId = boxContract.currentId();
 
