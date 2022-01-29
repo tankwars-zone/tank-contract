@@ -226,12 +226,16 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
             percentage.length == rarityType.length,
             "BoxStore: array invalid"
         );
+
         delete rarities;
         totalTank = total;
+
         uint256 totalPercent = 0;
+        uint256 totalSlot = 0;
         uint256 index = 1;
         for (uint256 i = 0; i < percentage.length; i++) {
             uint256 slot = total.mul(percentage[i]).div(ONE_HUNDRED_PERCENT);
+            totalSlot += slot;
             rarities.push(
                 Rarity({
                     totalSlot: slot,
@@ -246,8 +250,8 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
         }
 
         require(
-            totalPercent == ONE_HUNDRED_PERCENT,
-            "BoxStore: total percentage must be 100 %"
+            totalSlot == totalTank && totalPercent == ONE_HUNDRED_PERCENT,
+            "BoxStore: parameter invalid"
         );
     }
 
