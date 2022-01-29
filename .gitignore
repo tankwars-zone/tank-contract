@@ -2,3 +2,6 @@ build
 bin
 node_modules
 .env
+contracts/artifacts
+contracts/token/artifacts
+contracts/nft/artifacts
