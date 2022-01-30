@@ -6,7 +6,10 @@
     "compile": "truffle compile",
     "test": "truffle test",
     "deploy": "truffle migrate --reset --network production",
-    "flat:BoxStore": "npx hardhat flatten ./contracts/nft/BoxStore.sol  | awk '/SPDX-License-Identifier/&&c++>0 {next} 1' | awk '/pragma experimental ABIEncoderV2;/&&c++>0 {next} 1' > publish/BoxStore.flat.sol"
+    "flat:WBond": "npx hardhat flatten ./contracts/token/WBond.sol  | awk '/SPDX-License-Identifier/&&c++>0 {next} 1' | awk '/pragma experimental ABIEncoderV2;/&&c++>0 {next} 1' > publish/WBond.flat.sol",
+    "flat:BoxStore": "npx hardhat flatten ./contracts/nft/BoxStore.sol  | awk '/SPDX-License-Identifier/&&c++>0 {next} 1' | awk '/pragma experimental ABIEncoderV2;/&&c++>0 {next} 1' > publish/BoxStore.flat.sol",
+    "flat:MysteryBox": "npx hardhat flatten ./contracts/nft/MysteryBox.sol  | awk '/SPDX-License-Identifier/&&c++>0 {next} 1' | awk '/pragma experimental ABIEncoderV2;/&&c++>0 {next} 1' > publish/MysteryBox.flat.sol",
+    "flat:Tank": "npx hardhat flatten ./contracts/nft/Tank.sol  | awk '/SPDX-License-Identifier/&&c++>0 {next} 1' | awk '/pragma experimental ABIEncoderV2;/&&c++>0 {next} 1' > publish/Tank.flat.sol"
   },
   "repository": {
     "type": "git",
