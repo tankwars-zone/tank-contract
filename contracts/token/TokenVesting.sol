@@ -162,9 +162,11 @@ contract TokenVesting is Ownable {
         } else {
             uint256 totalBalance = accountInfo.balance + accountInfo.released;
 
-            //uint256 numCliff = (block.timestamp - poolInfo.startTime) / poolInfo.cliffDuration;
+            uint256 numCliff = (block.timestamp - poolInfo.startTime) /
+                poolInfo.cliffDuration;
 
-            uint256 amount = ((block.timestamp - poolInfo.startTime) *
+            uint256 amount = (poolInfo.cliffDuration *
+                numCliff *
                 totalBalance) / poolInfo.duration;
 
             return
