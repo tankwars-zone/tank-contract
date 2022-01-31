@@ -7,10 +7,14 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract TokenVesting is Ownable {
-
     using SafeERC20 for IERC20;
 
-    event PoolAdded(uint256 poolId, uint256 startTime, uint256 cliffDuration, uint256 duration);
+    event PoolAdded(
+        uint256 poolId,
+        uint256 startTime,
+        uint256 cliffDuration,
+        uint256 duration
+    );
     event PoolRemoved(uint256 poolId);
     event TokenLocked(uint256 poolId, address account, uint256 amount);
     event TokenReleased(uint256 poolId, address account, uint256 amount);
@@ -18,9 +22,9 @@ contract TokenVesting is Ownable {
     IERC20 private _token;
 
     struct Pool {
-        uint256 startTime;      // second
-        uint256 cliffDuration;  // second
-        uint256 duration;       // second
+        uint256 startTime; // second
+        uint256 cliffDuration; // second
+        uint256 duration; // second
         uint256 balance;
     }
 
@@ -34,69 +38,70 @@ contract TokenVesting is Ownable {
     mapping(uint256 => mapping(address => Account)) private _accounts;
 
     modifier poolExist(uint256 poolId) {
-        require(_pools[poolId].duration > 0, "TokenVesting: pool does not exist");
+        require(
+            _pools[poolId].duration > 0,
+            "TokenVesting: pool does not exist"
+        );
         _;
     }
 
-    constructor(IERC20 token)
-    {
+    constructor(IERC20 token) {
         _token = token;
     }
 
-    function getContractInfo()
-        public
-        view
-        returns (address, uint256)
-    {
-        return (
-            address(_token),
-            _token.balanceOf(address(this))
-        );
+    function getContractInfo() public view returns (address, uint256) {
+        return (address(_token), _token.balanceOf(address(this)));
     }
 
-    function addPool(uint256 poolId, uint256 startTime, uint256 cliffDuration, uint256 duration)
-        public
-        onlyOwner
-    {
+    function addPool(
+        uint256 poolId,
+        uint256 startTime,
+        uint256 cliffDuration,
+        uint256 duration
+    ) public onlyOwner {
         require(_pools[poolId].duration == 0, "TokenVesting: pool existed");
 
-        require(cliffDuration > 0 && cliffDuration <= duration, "TokenVesting: cliff duration is longer than duration");
+        require(
+            cliffDuration > 0 && cliffDuration <= duration,
+            "TokenVesting: cliff duration is longer than duration"
+        );
 
-        require(startTime + duration > block.timestamp, "TokenVesting: final time is before current time");
+        require(
+            startTime + duration > block.timestamp,
+            "TokenVesting: final time is before current time"
+        );
 
         _pools[poolId] = Pool(startTime, cliffDuration, duration, 0);
 
         emit PoolAdded(poolId, startTime, cliffDuration, duration);
     }
 
-    function removePool(uint256 poolId)
-        public
-        onlyOwner
-        poolExist(poolId)
-    {
-        require(_pools[poolId].balance == 0, "TokenVesting: pool is containing token");
+    function removePool(uint256 poolId) public onlyOwner poolExist(poolId) {
+        require(
+            _pools[poolId].balance == 0,
+            "TokenVesting: pool is containing token"
+        );
 
         delete _pools[poolId];
 
         emit PoolRemoved(poolId);
     }
 
-    function getPoolInfo(uint256 poolId)
-        public
-        view
-        returns (Pool memory)
-    {
+    function getPoolInfo(uint256 poolId) public view returns (Pool memory) {
         return _pools[poolId];
     }
 
-    function lockToken(uint256 poolId, address[] memory accounts, uint256[] memory amounts)
-        public
-        onlyOwner
-        poolExist(poolId)
-    {
+    function lockToken(
+        uint256 poolId,
+        address[] memory accounts,
+        uint256[] memory amounts
+    ) public onlyOwner poolExist(poolId) {
         uint256 length = accounts.length;
 
-        require(length > 0 && length == amounts.length, "TokenVesting: array length is invalid"); 
+        require(
+            length > 0 && length == amounts.length,
+            "TokenVesting: array length is invalid"
+        );
 
         uint256 total = 0;
 
@@ -122,10 +127,7 @@ contract TokenVesting is Ownable {
         }
     }
 
-    function releaseToken(uint256 poolId)
-        public
-        poolExist(poolId)
-    {
+    function releaseToken(uint256 poolId) public poolExist(poolId) {
         address msgSender = _msgSender();
 
         uint256 amount = getVestedTokenAmount(poolId, msgSender);
@@ -155,18 +157,20 @@ contract TokenVesting is Ownable {
 
         if (block.timestamp < poolInfo.startTime + poolInfo.cliffDuration) {
             return 0;
-
         } else if (block.timestamp >= poolInfo.startTime + poolInfo.duration) {
             return accountInfo.balance;
-
         } else {
             uint256 totalBalance = accountInfo.balance + accountInfo.released;
 
-            uint256 numCliff = (block.timestamp - poolInfo.startTime) / poolInfo.cliffDuration;
+            //uint256 numCliff = (block.timestamp - poolInfo.startTime) / poolInfo.cliffDuration;
 
-            uint256 amount = poolInfo.cliffDuration * numCliff * totalBalance / poolInfo.duration;
+            uint256 amount = ((block.timestamp - poolInfo.startTime) *
+                totalBalance) / poolInfo.duration;
 
-            return amount > accountInfo.released ? amount - accountInfo.released : 0;
+            return
+                amount > accountInfo.released
+                    ? amount - accountInfo.released
+                    : 0;
         }
     }
 
@@ -177,5 +181,4 @@ contract TokenVesting is Ownable {
     {
         return _accounts[poolId][account];
     }
-
 }
