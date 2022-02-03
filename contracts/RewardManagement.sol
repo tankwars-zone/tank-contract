@@ -31,14 +31,6 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
     uint256 public quotaClaim;
     bool public verifyQuota;
 
-    modifier onlyAdmin() {
-        require(
-            hasRole(DEFAULT_ADMIN_ROLE, _msgSender()),
-            "RewardManagement: Must Have Admin Role"
-        );
-        _;
-    }
-
     modifier onlyOperator() {
         require(
             hasRole(SIGNER_ROLE, _msgSender()),
@@ -71,7 +63,7 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
 
     function setTgold(ITGlod _tglod)
         external
-        onlyAdmin
+        onlyOperator
         notNull(address(_tglod))
     {
         tglod = _tglod;
@@ -107,10 +99,13 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
         string memory claimId,
         bytes calldata signature
     ) external nonReentrant {
+        require(amount <= quotaClaim, "RewardManagement: Amount Is Exceed");
+
         require(
             (block.timestamp - timestamp) <= _expiredTime,
             "RewardManagement: Transaction Expired"
         );
+
         require(!_claimId[claimId], "RewardManagement: Transaction Executed");
 
         bytes32 hashMessage = keccak256(
