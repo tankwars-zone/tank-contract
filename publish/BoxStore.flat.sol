@@ -1,4 +1,6 @@
-// File: @openzeppelin/contracts/utils/Context.sol
+// Sources flattened with hardhat v2.8.3 https://hardhat.org
+
+// File @openzeppelin/contracts/utils/Context.sol@v4.0.0
 
 // SPDX-License-Identifier: MIT
 
@@ -25,7 +27,8 @@ abstract contract Context {
     }
 }
 
-// File: @openzeppelin/contracts/utils/introspection/IERC165.sol
+
+// File @openzeppelin/contracts/utils/introspection/IERC165.sol@v4.0.0
 
 
 pragma solidity ^0.8.0;
@@ -51,11 +54,11 @@ interface IERC165 {
     function supportsInterface(bytes4 interfaceId) external view returns (bool);
 }
 
-// File: @openzeppelin/contracts/utils/introspection/ERC165.sol
+
+// File @openzeppelin/contracts/utils/introspection/ERC165.sol@v4.0.0
 
 
 pragma solidity ^0.8.0;
-
 
 /**
  * @dev Implementation of the {IERC165} interface.
@@ -80,11 +83,11 @@ abstract contract ERC165 is IERC165 {
     }
 }
 
-// File: @openzeppelin/contracts/access/AccessControl.sol
+
+// File @openzeppelin/contracts/access/AccessControl.sol@v4.0.0
 
 
 pragma solidity ^0.8.0;
-
 
 
 /**
@@ -294,7 +297,8 @@ abstract contract AccessControl is Context, IAccessControl, ERC165 {
     }
 }
 
-// File: @openzeppelin/contracts/utils/structs/EnumerableSet.sol
+
+// File @openzeppelin/contracts/utils/structs/EnumerableSet.sol@v4.0.0
 
 
 pragma solidity ^0.8.0;
@@ -593,11 +597,11 @@ library EnumerableSet {
     }
 }
 
-// File: @openzeppelin/contracts/access/AccessControlEnumerable.sol
+
+// File @openzeppelin/contracts/access/AccessControlEnumerable.sol@v4.0.0
 
 
 pragma solidity ^0.8.0;
-
 
 
 /**
@@ -681,7 +685,8 @@ abstract contract AccessControlEnumerable is IAccessControlEnumerable, AccessCon
     }
 }
 
-// File: @openzeppelin/contracts/security/ReentrancyGuard.sol
+
+// File @openzeppelin/contracts/security/ReentrancyGuard.sol@v4.0.0
 
 
 pragma solidity ^0.8.0;
@@ -745,7 +750,8 @@ abstract contract ReentrancyGuard {
     }
 }
 
-// File: @openzeppelin/contracts/token/ERC20/IERC20.sol
+
+// File @openzeppelin/contracts/token/ERC20/IERC20.sol@v4.0.0
 
 
 pragma solidity ^0.8.0;
@@ -824,7 +830,229 @@ interface IERC20 {
     event Approval(address indexed owner, address indexed spender, uint256 value);
 }
 
-// File: contracts/nft/BoxStore.sol
+
+// File @openzeppelin/contracts/utils/math/SafeMath.sol@v4.0.0
+
+
+pragma solidity ^0.8.0;
+
+// CAUTION
+// This version of SafeMath should only be used with Solidity 0.8 or later,
+// because it relies on the compiler's built in overflow checks.
+
+/**
+ * @dev Wrappers over Solidity's arithmetic operations.
+ *
+ * NOTE: `SafeMath` is no longer needed starting with Solidity 0.8. The compiler
+ * now has built in overflow checking.
+ */
+library SafeMath {
+    /**
+     * @dev Returns the addition of two unsigned integers, with an overflow flag.
+     *
+     * _Available since v3.4._
+     */
+    function tryAdd(uint256 a, uint256 b) internal pure returns (bool, uint256) {
+        unchecked {
+            uint256 c = a + b;
+            if (c < a) return (false, 0);
+            return (true, c);
+        }
+    }
+
+    /**
+     * @dev Returns the substraction of two unsigned integers, with an overflow flag.
+     *
+     * _Available since v3.4._
+     */
+    function trySub(uint256 a, uint256 b) internal pure returns (bool, uint256) {
+        unchecked {
+            if (b > a) return (false, 0);
+            return (true, a - b);
+        }
+    }
+
+    /**
+     * @dev Returns the multiplication of two unsigned integers, with an overflow flag.
+     *
+     * _Available since v3.4._
+     */
+    function tryMul(uint256 a, uint256 b) internal pure returns (bool, uint256) {
+        unchecked {
+            // Gas optimization: this is cheaper than requiring 'a' not being zero, but the
+            // benefit is lost if 'b' is also tested.
+            // See: https://github.com/OpenZeppelin/openzeppelin-contracts/pull/522
+            if (a == 0) return (true, 0);
+            uint256 c = a * b;
+            if (c / a != b) return (false, 0);
+            return (true, c);
+        }
+    }
+
+    /**
+     * @dev Returns the division of two unsigned integers, with a division by zero flag.
+     *
+     * _Available since v3.4._
+     */
+    function tryDiv(uint256 a, uint256 b) internal pure returns (bool, uint256) {
+        unchecked {
+            if (b == 0) return (false, 0);
+            return (true, a / b);
+        }
+    }
+
+    /**
+     * @dev Returns the remainder of dividing two unsigned integers, with a division by zero flag.
+     *
+     * _Available since v3.4._
+     */
+    function tryMod(uint256 a, uint256 b) internal pure returns (bool, uint256) {
+        unchecked {
+            if (b == 0) return (false, 0);
+            return (true, a % b);
+        }
+    }
+
+    /**
+     * @dev Returns the addition of two unsigned integers, reverting on
+     * overflow.
+     *
+     * Counterpart to Solidity's `+` operator.
+     *
+     * Requirements:
+     *
+     * - Addition cannot overflow.
+     */
+    function add(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a + b;
+    }
+
+    /**
+     * @dev Returns the subtraction of two unsigned integers, reverting on
+     * overflow (when the result is negative).
+     *
+     * Counterpart to Solidity's `-` operator.
+     *
+     * Requirements:
+     *
+     * - Subtraction cannot overflow.
+     */
+    function sub(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a - b;
+    }
+
+    /**
+     * @dev Returns the multiplication of two unsigned integers, reverting on
+     * overflow.
+     *
+     * Counterpart to Solidity's `*` operator.
+     *
+     * Requirements:
+     *
+     * - Multiplication cannot overflow.
+     */
+    function mul(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a * b;
+    }
+
+    /**
+     * @dev Returns the integer division of two unsigned integers, reverting on
+     * division by zero. The result is rounded towards zero.
+     *
+     * Counterpart to Solidity's `/` operator.
+     *
+     * Requirements:
+     *
+     * - The divisor cannot be zero.
+     */
+    function div(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a / b;
+    }
+
+    /**
+     * @dev Returns the remainder of dividing two unsigned integers. (unsigned integer modulo),
+     * reverting when dividing by zero.
+     *
+     * Counterpart to Solidity's `%` operator. This function uses a `revert`
+     * opcode (which leaves remaining gas untouched) while Solidity uses an
+     * invalid opcode to revert (consuming all remaining gas).
+     *
+     * Requirements:
+     *
+     * - The divisor cannot be zero.
+     */
+    function mod(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a % b;
+    }
+
+    /**
+     * @dev Returns the subtraction of two unsigned integers, reverting with custom message on
+     * overflow (when the result is negative).
+     *
+     * CAUTION: This function is deprecated because it requires allocating memory for the error
+     * message unnecessarily. For custom revert reasons use {trySub}.
+     *
+     * Counterpart to Solidity's `-` operator.
+     *
+     * Requirements:
+     *
+     * - Subtraction cannot overflow.
+     */
+    function sub(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
+        unchecked {
+            require(b <= a, errorMessage);
+            return a - b;
+        }
+    }
+
+    /**
+     * @dev Returns the integer division of two unsigned integers, reverting with custom message on
+     * division by zero. The result is rounded towards zero.
+     *
+     * Counterpart to Solidity's `%` operator. This function uses a `revert`
+     * opcode (which leaves remaining gas untouched) while Solidity uses an
+     * invalid opcode to revert (consuming all remaining gas).
+     *
+     * Counterpart to Solidity's `/` operator. Note: this function uses a
+     * `revert` opcode (which leaves remaining gas untouched) while Solidity
+     * uses an invalid opcode to revert (consuming all remaining gas).
+     *
+     * Requirements:
+     *
+     * - The divisor cannot be zero.
+     */
+    function div(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
+        unchecked {
+            require(b > 0, errorMessage);
+            return a / b;
+        }
+    }
+
+    /**
+     * @dev Returns the remainder of dividing two unsigned integers. (unsigned integer modulo),
+     * reverting with custom message when dividing by zero.
+     *
+     * CAUTION: This function is deprecated because it requires allocating memory for the error
+     * message unnecessarily. For custom revert reasons use {tryMod}.
+     *
+     * Counterpart to Solidity's `%` operator. This function uses a `revert`
+     * opcode (which leaves remaining gas untouched) while Solidity uses an
+     * invalid opcode to revert (consuming all remaining gas).
+     *
+     * Requirements:
+     *
+     * - The divisor cannot be zero.
+     */
+    function mod(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
+        unchecked {
+            require(b > 0, errorMessage);
+            return a % b;
+        }
+    }
+}
+
+
+// File contracts/nft/BoxStore.sol
 
 pragma solidity ^0.8.0;
 
@@ -846,7 +1074,9 @@ interface ITank {
 }
 
 contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
+    using SafeMath for uint256;
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
+    uint256 public constant ONE_HUNDRED_PERCENT = 10000;
 
     event AdminWalletUpdated(address wallet);
     event RoundUpdated(
@@ -867,7 +1097,12 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
         uint256 boxIdFrom,
         uint256 boxIdTo
     );
-    event BoxOpened(address user, uint256 boxId, uint256 tankId);
+    event BoxOpened(
+        address user,
+        uint256 boxId,
+        uint256 tankId,
+        uint256 rarity
+    );
 
     IMysterBox public boxContract;
 
@@ -888,6 +1123,14 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
         uint256 numBoxesPerAccount;
     }
 
+    struct Rarity {
+        uint256 totalSlot;
+        uint256 startFrom;
+        uint256 endAt;
+        uint256 filled;
+        uint256 rarityType;
+    }
+
     // round id => round information
     mapping(uint256 => Round) public rounds;
 
@@ -897,6 +1140,10 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
     mapping(address => bool) public isInWhitelist;
 
     uint256 public openBoxAt;
+
+    uint256 private nonce;
+    Rarity[] private rarities;
+    uint256 private totalTank;
 
     modifier onlyAdmin() {
         require(
@@ -924,6 +1171,7 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
         tankContract = tank;
         adminWallet = wallet;
         wbondContract = wbond;
+        nonce = 1;
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _setupRole(OPERATOR_ROLE, _msgSender());
     }
@@ -1020,6 +1268,48 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
         }
 
         emit WhitelistUpdated(accounts, status);
+    }
+
+    function setRarity(
+        uint256 total,
+        uint256[] calldata rarityType,
+        uint256[] calldata percentage
+    ) external onlyOperator {
+        require(
+            percentage.length == rarityType.length,
+            "BoxStore: array invalid"
+        );
+
+        delete rarities;
+        totalTank = total;
+
+        uint256 totalPercent = 0;
+        uint256 totalSlot = 0;
+        uint256 index = 1;
+        for (uint256 i = 0; i < percentage.length; i++) {
+            uint256 slot = total.mul(percentage[i]).div(ONE_HUNDRED_PERCENT);
+            totalSlot += slot;
+            rarities.push(
+                Rarity({
+                    totalSlot: slot,
+                    startFrom: index,
+                    endAt: slot.add(index).sub(1),
+                    filled: 0,
+                    rarityType: rarityType[i]
+                })
+            );
+            index += slot;
+            totalPercent += percentage[i];
+        }
+
+        require(
+            totalSlot == totalTank && totalPercent == ONE_HUNDRED_PERCENT,
+            "BoxStore: parameter invalid"
+        );
+    }
+
+    function getRatiry(uint256 id) external view returns (Rarity memory) {
+        return rarities[id];
     }
 
     function buyBoxInPrivateSale(uint256 roundId, uint256 quantity)
@@ -1120,8 +1410,55 @@ contract BoxStore is AccessControlEnumerable, ReentrancyGuard {
 
         tankContract.mint(user);
 
-        emit BoxOpened(user, boxId, tankContract.currentId());
+        uint256 rarityType = _getRatiryType();
+
+        require(rarityType > 0, "BoxStore: Tank is exceed");
+
+        emit BoxOpened(user, boxId, tankContract.currentId(), rarityType);
 
         return this.onERC721Received.selector;
+    }
+
+    function _getRatiryType() internal returns (uint256) {
+        bool usingNext = false;
+        uint256 rarityType = 0;
+        uint8 find = 0;
+        uint256 index = 0;
+        while (rarityType == 0 && find < 2) {
+            if (!usingNext) {
+                index = _random();
+            }
+            for (uint256 i = 0; i < rarities.length; i++) {
+                Rarity storage rarity = rarities[i];
+                if (rarity.startFrom <= index && rarity.endAt >= index) {
+                    if (rarity.totalSlot == rarity.filled) {
+                        usingNext = true;
+                        continue;
+                    } else {
+                        rarity.filled++;
+                        rarityType = rarity.rarityType;
+                        break;
+                    }
+                }
+                if (usingNext && rarity.totalSlot > rarity.filled) {
+                    rarity.filled++;
+                    rarityType = rarity.rarityType;
+                    break;
+                }
+            }
+            find++;
+        }
+        return rarityType;
+    }
+
+    function _random() internal returns (uint256) {
+        uint256 randomnumber = uint256(
+            keccak256(
+                abi.encodePacked(block.difficulty, block.timestamp, nonce)
+            )
+        ) % totalTank;
+        randomnumber = randomnumber + 1;
+        nonce++;
+        return randomnumber;
     }
 }

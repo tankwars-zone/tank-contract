@@ -10,24 +10,74 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-contract Marketplace is OwnableUpgradeable, PausableUpgradeable, ReentrancyGuardUpgradeable {
-
+contract Marketplace is
+    OwnableUpgradeable,
+    PausableUpgradeable,
+    ReentrancyGuardUpgradeable
+{
     using SafeERC20 for IERC20;
 
-    uint256 constant public ONE_HUNDRED_PERCENT = 10000; // 100%
+    uint256 public constant ONE_HUNDRED_PERCENT = 10000; // 100%
 
     event SystemFeePercentUpdated(uint256 percent);
     event AdminWalletUpdated(address wallet);
     event Erc20WhitelistUpdated(address[] erc20s, bool status);
     event Erc721WhitelistUpdated(address[] erc721s, bool status);
 
-    event AskCreated(address erc721, address erc20, address seller, uint256 price, uint256 tokenId);
-    event AskCanceled(address erc721, address erc20, address seller, uint256 price, uint256 tokenId);
-    event BidCreated(address erc721, address erc20, address bidder, uint256 price, uint256 tokenId, uint256 bidId);
-    event BidCanceled(address erc721, address erc20, address bidder, uint256 price, uint256 tokenId, uint256 bidId);
-    event BidAccepted(address erc721, address erc20, address bidder, address seller, uint256 price, uint256 tokenId, uint256 bidId);
-    event TokenSold(address erc721, address erc20, address buyer, address seller, uint256 price, uint256 tokenId);
-    event Payout(address erc721, address erc20, uint256 tokenId, uint256 systemFeePayment, uint256 sellerPayment);
+    event AskCreated(
+        address erc721,
+        address erc20,
+        address seller,
+        uint256 price,
+        uint256 tokenId
+    );
+    event AskCanceled(
+        address erc721,
+        address erc20,
+        address seller,
+        uint256 price,
+        uint256 tokenId
+    );
+    event BidCreated(
+        address erc721,
+        address erc20,
+        address bidder,
+        uint256 price,
+        uint256 tokenId,
+        uint256 bidId
+    );
+    event BidCanceled(
+        address erc721,
+        address erc20,
+        address bidder,
+        uint256 price,
+        uint256 tokenId,
+        uint256 bidId
+    );
+    event BidAccepted(
+        address erc721,
+        address erc20,
+        address bidder,
+        address seller,
+        uint256 price,
+        uint256 tokenId,
+        uint256 bidId
+    );
+    event TokenSold(
+        address erc721,
+        address erc20,
+        address buyer,
+        address seller,
+        uint256 price,
+        uint256 tokenId
+    );
+    event Payout(
+        address erc721,
+        address erc20,
+        uint256 tokenId,
+        uint256 systemFeePayment,
+        uint256 sellerPayment
+    );
 
     uint256 public systemFeePercent;
 
@@ -57,20 +107,21 @@ contract Marketplace is OwnableUpgradeable, PausableUpgradeable, ReentrancyGuard
     mapping(address => mapping(uint256 => mapping(uint256 => Bid))) public bids;
 
     // user address => erc721 address => token id => bid id
-    mapping(address => mapping(address => mapping(uint256 => uint256))) public currentBids;
+    mapping(address => mapping(address => mapping(uint256 => uint256)))
+        public currentBids;
 
     // erc721 address => token id => sell order
     mapping(address => mapping(uint256 => Ask)) public asks;
 
     modifier inWhitelist(address erc721, address erc20) {
-        require(erc721Whitelist[erc721] && erc20Whitelist[erc20], "Marketplace: erc721 and erc20 must be in whitelist");
+        require(
+            erc721Whitelist[erc721] && erc20Whitelist[erc20],
+            "Marketplace: erc721 and erc20 must be in whitelist"
+        );
         _;
     }
 
-    function initialize()
-        public
-        initializer
-    {
+    function initialize() public initializer {
         __Ownable_init();
         __Pausable_init();
         __ReentrancyGuard_init();
@@ -80,21 +131,18 @@ contract Marketplace is OwnableUpgradeable, PausableUpgradeable, ReentrancyGuard
         adminWallet = _msgSender();
     }
 
-    function setSystemFeePercent(uint256 percent)
-        public
-        onlyOwner
-    {
-        require(percent <= ONE_HUNDRED_PERCENT, "Marketplace: percent is invalid");
+    function setSystemFeePercent(uint256 percent) public onlyOwner {
+        require(
+            percent <= ONE_HUNDRED_PERCENT,
+            "Marketplace: percent is invalid"
+        );
 
         systemFeePercent = percent;
 
         emit SystemFeePercentUpdated(percent);
     }
 
-    function setAdminWallet(address wallet)
-        public
-        onlyOwner
-    {
+    function setAdminWallet(address wallet) public onlyOwner {
         require(wallet != address(0), "Marketplace: address is invalid");
 
         adminWallet = wallet;
@@ -132,26 +180,20 @@ contract Marketplace is OwnableUpgradeable, PausableUpgradeable, ReentrancyGuard
         emit Erc721WhitelistUpdated(erc721s, status);
     }
 
-    function pause()
-        public
-        onlyOwner
-    {
+    function pause() public onlyOwner {
         _pause();
     }
 
-    function unpause()
-        public
-        onlyOwner
-    {
+    function unpause() public onlyOwner {
         _unpause();
     }
 
-    function setSalePrice(address erc721, address erc20, uint256 tokenId, uint256 price)
-        public
-        whenNotPaused
-        nonReentrant
-        inWhitelist(erc721, erc20)
-    {
+    function setSalePrice(
+        address erc721,
+        address erc20,
+        uint256 tokenId,
+        uint256 price
+    ) public whenNotPaused nonReentrant inWhitelist(erc721, erc20) {
         address msgSender = _msgSender();
 
         require(price > 0, "Marketplace: price must be greater than 0");
@@ -160,9 +202,11 @@ contract Marketplace is OwnableUpgradeable, PausableUpgradeable, ReentrancyGuard
 
         if (info.seller == address(0)) {
             IERC721(erc721).transferFrom(msgSender, address(this), tokenId);
-
         } else {
-            require(info.seller == msgSender, "Marketplace: can not change sale if sender has not made one");
+            require(
+                info.seller == msgSender,
+                "Marketplace: can not change sale if sender has not made one"
+            );
         }
 
         asks[erc721][tokenId] = Ask(erc20, msgSender, price);
@@ -179,7 +223,10 @@ contract Marketplace is OwnableUpgradeable, PausableUpgradeable, ReentrancyGuard
 
         Ask memory info = asks[erc721][tokenId];
 
-        require(info.seller == msgSender, "Marketplace: can not cancel sale if sender has not made one");
+        require(
+            info.seller == msgSender,
+            "Marketplace: can not cancel sale if sender has not made one"
+        );
 
         IERC721(erc721).transferFrom(address(this), msgSender, tokenId);
 
@@ -188,24 +235,28 @@ contract Marketplace is OwnableUpgradeable, PausableUpgradeable, ReentrancyGuard
         delete asks[erc721][tokenId];
     }
 
-    function bid(address erc721, address erc20, uint256 tokenId, uint256 price)
-        public
-        payable
-        whenNotPaused
-        nonReentrant
-        inWhitelist(erc721, erc20)
-    {
+    function bid(
+        address erc721,
+        address erc20,
+        uint256 tokenId,
+        uint256 price
+    ) public payable whenNotPaused nonReentrant inWhitelist(erc721, erc20) {
         require(price > 0, "Marketplace: price must be greater than 0");
 
         address msgSender = _msgSender();
 
         address nftOwner = IERC721(erc721).ownerOf(tokenId);
 
-        require(asks[erc721][tokenId].seller != msgSender && nftOwner != msgSender, "Marketplace: can not bid");
+        require(
+            asks[erc721][tokenId].seller != msgSender && nftOwner != msgSender,
+            "Marketplace: can not bid"
+        );
 
         if (erc20 == address(0)) {
-            require(msg.value == price, "Marketplace: deposit amount is not enough");
-
+            require(
+                msg.value == price,
+                "Marketplace: deposit amount is not enough"
+            );
         } else {
             IERC20(erc20).safeTransferFrom(msgSender, address(this), price);
         }
@@ -232,55 +283,85 @@ contract Marketplace is OwnableUpgradeable, PausableUpgradeable, ReentrancyGuard
     {
         address msgSender = _msgSender();
 
-        _cancelBid(erc721, tokenId, msgSender, currentBids[msgSender][erc721][tokenId]);
+        _cancelBid(
+            erc721,
+            tokenId,
+            msgSender,
+            currentBids[msgSender][erc721][tokenId]
+        );
 
         delete currentBids[msgSender][erc721][tokenId];
     }
 
-    function _cancelBid(address erc721, uint256 tokenId, address bidder, uint256 bidId)
-        internal
-    {
+    function _cancelBid(
+        address erc721,
+        uint256 tokenId,
+        address bidder,
+        uint256 bidId
+    ) internal {
         Bid memory info = bids[erc721][tokenId][bidId];
 
-        require(info.bidder == bidder, "Marketplace: can not cancel a bid if sender has not made one");
+        require(
+            info.bidder == bidder,
+            "Marketplace: can not cancel a bid if sender has not made one"
+        );
 
         if (info.erc20 == address(0)) {
             payable(bidder).transfer(info.price);
-
         } else {
             IERC20(info.erc20).safeTransfer(bidder, info.price);
         }
 
-        emit BidCanceled(erc721, info.erc20, bidder, info.price, tokenId, bidId);
+        emit BidCanceled(
+            erc721,
+            info.erc20,
+            bidder,
+            info.price,
+            tokenId,
+            bidId
+        );
 
         delete bids[erc721][tokenId][bidId];
     }
 
-    function acceptBid(address erc721, uint256 tokenId, uint256 bidId)
-        public
-        whenNotPaused
-        nonReentrant
-    {
+    function acceptBid(
+        address erc721,
+        uint256 tokenId,
+        uint256 bidId
+    ) public whenNotPaused nonReentrant {
         address msgSender = _msgSender();
 
         Bid memory info = bids[erc721][tokenId][bidId];
 
-        require(info.bidder != address(0), "Marketplace: can not accept a bid when there is none");
+        require(
+            info.bidder != address(0),
+            "Marketplace: can not accept a bid when there is none"
+        );
 
         address nftOwner = IERC721(erc721).ownerOf(tokenId);
 
-        require(asks[erc721][tokenId].seller == msgSender || nftOwner == msgSender, "Marketplace: sender is not token owner");
+        require(
+            asks[erc721][tokenId].seller == msgSender || nftOwner == msgSender,
+            "Marketplace: sender is not token owner"
+        );
 
         if (nftOwner == address(this)) {
             IERC721(erc721).transferFrom(address(this), info.bidder, tokenId);
-
         } else {
             IERC721(erc721).transferFrom(msgSender, info.bidder, tokenId);
         }
 
         _payout(erc721, info.erc20, tokenId, info.price, msgSender);
 
-        emit BidAccepted(erc721, info.erc20, info.bidder, msgSender, info.price, tokenId, bidId);
+        emit BidAccepted(
+            erc721,
+            info.erc20,
+            info.bidder,
+            msgSender,
+            info.price,
+            tokenId,
+            bidId
+        );
 
         delete asks[erc721][tokenId];
         delete currentBids[info.bidder][erc721][tokenId];
@@ -302,17 +383,30 @@ contract Marketplace is OwnableUpgradeable, PausableUpgradeable, ReentrancyGuard
         require(info.seller != msgSender, "Marketplace: can not buy");
 
         if (info.erc20 == address(0)) {
-            require(msg.value == info.price, "Marketplace: deposit amount is not enough");
-
+            require(
+                msg.value == info.price,
+                "Marketplace: deposit amount is not enough"
+            );
         } else {
-            IERC20(info.erc20).safeTransferFrom(msgSender, address(this), info.price);
+            IERC20(info.erc20).safeTransferFrom(
+                msgSender,
+                address(this),
+                info.price
+            );
         }
 
         IERC721(erc721).transferFrom(address(this), msgSender, tokenId);
 
         _payout(erc721, info.erc20, tokenId, info.price, info.seller);
 
-        emit TokenSold(erc721, info.erc20, msgSender, info.seller, info.price, tokenId);
+        emit TokenSold(
+            erc721,
+            info.erc20,
+            msgSender,
+            info.seller,
+            info.price,
+            tokenId
+        );
 
         uint256 oldBid = currentBids[msgSender][erc721][tokenId];
 
@@ -321,9 +415,13 @@ contract Marketplace is OwnableUpgradeable, PausableUpgradeable, ReentrancyGuard
         delete currentBids[msgSender][erc721][tokenId];
     }
 
-    function _payout(address erc721, address erc20, uint256 tokenId, uint256 price, address seller)
-        internal
-    {
+    function _payout(
+        address erc721,
+        address erc20,
+        uint256 tokenId,
+        uint256 price,
+        address seller
+    ) internal {
         uint256 systemFeePayment = _calculateSystemFee(price, systemFeePercent);
 
         uint256 sellerPayment = price - systemFeePayment;
@@ -336,7 +434,6 @@ contract Marketplace is OwnableUpgradeable, PausableUpgradeable, ReentrancyGuard
             if (sellerPayment > 0) {
                 payable(seller).transfer(sellerPayment);
             }
-
         } else {
             if (systemFeePayment > 0) {
                 IERC20(erc20).safeTransfer(adminWallet, systemFeePayment);
@@ -355,7 +452,6 @@ contract Marketplace is OwnableUpgradeable, PausableUpgradeable, ReentrancyGuard
         pure
         returns (uint256)
     {
-        return price * feePercent / ONE_HUNDRED_PERCENT;
+        return (price * feePercent) / ONE_HUNDRED_PERCENT;
     }
-
 }

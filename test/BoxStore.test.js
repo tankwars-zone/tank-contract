@@ -58,7 +58,7 @@ describe("BoxStore", () => {
     let res = {};
     for (let i = 1; i <= 10; i++) {
       await this.box.safeTransferFrom(minter, this.boxStore.address, i, { from: minter });
-      assert.equal((await this.tank.ownerOf(1)).toString(), minter);
+      assert.equal((await this.tank.ownerOf(i)).toString(), minter);
       await time.increase(12);
     }
     console.log(await this.boxStore.getRatiry(0));
