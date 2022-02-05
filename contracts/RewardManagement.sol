@@ -96,7 +96,7 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
     function claim(
         uint256 amount,
         uint256 timestamp,
-        string memory claimId,
+        string calldata claimId,
         bytes calldata signature
     ) external nonReentrant {
         require(amount <= quotaClaim, "RewardManagement: Amount Is Exceed");
