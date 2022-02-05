@@ -99,8 +99,6 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
         string calldata claimId,
         bytes calldata signature
     ) external nonReentrant {
-        require(amount <= quotaClaim, "RewardManagement: Amount Is Exceed");
-
         require(
             (block.timestamp - timestamp) <= _expiredTime,
             "RewardManagement: Transaction Expired"
@@ -120,6 +118,8 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
 
         uint32 date = _getCurrentDate();
         if (verifyQuota) {
+            require(amount <= quotaClaim, "RewardManagement: Amount Is Exceed");
+
             require(
                 _dateQuota[date] <= quotaMintPerDate,
                 "RewardManagement: Quota Per Date Exceed"
