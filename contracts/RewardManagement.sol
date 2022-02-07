@@ -48,14 +48,13 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
         ITGlod _tglod,
         uint256 _quotaMintPerDate,
         uint256 _quotaUserMintPerDate,
-        uint256 _quotaClaim,
-        bool _verifyQuota
+        uint256 _quotaClaim
     ) {
         tglod = _tglod;
         quotaMintPerDate = _quotaMintPerDate;
         quotaUserMintPerDate = _quotaUserMintPerDate;
-        verifyQuota = _verifyQuota;
         quotaClaim = _quotaClaim;
+        verifyQuota = true;
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _setupRole(SIGNER_ROLE, _msgSender());
         _setupRole(OPERATOR_ROLE, _msgSender());
