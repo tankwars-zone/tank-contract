@@ -368,17 +368,18 @@ contract Marketplace is
         delete bids[erc721][tokenId][bidId];
     }
 
-    function buy(address erc721, uint256 tokenId)
-        public
-        payable
-        whenNotPaused
-        nonReentrant
-    {
+    function buy(
+        address erc721,
+        uint256 tokenId,
+        uint256 price
+    ) public payable whenNotPaused nonReentrant {
         address msgSender = _msgSender();
 
         Ask memory info = asks[erc721][tokenId];
 
         require(info.price > 0, "Marketplace: token is not for sale");
+
+        require(info.price == price, "Marketplace: price does not match");
 
         require(info.seller != msgSender, "Marketplace: can not buy");
 

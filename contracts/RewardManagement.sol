@@ -21,7 +21,7 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
     bytes32 public constant SIGNER_ROLE = keccak256("SIGNER_ROLE");
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
-    ITGlod tglod;
+    ITGlod public tglod;
     uint256 private _expiredTime = 300;
     mapping(address => mapping(uint32 => uint256)) private _userQuota;
     mapping(uint32 => uint256) private _dateQuota;
