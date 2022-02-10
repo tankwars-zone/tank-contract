@@ -21,7 +21,7 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
     bytes32 public constant SIGNER_ROLE = keccak256("SIGNER_ROLE");
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
-    ITGlod tglod;
+    ITGlod public tglod;
     uint256 private _expiredTime = 300;
     mapping(address => mapping(uint32 => uint256)) private _userQuota;
     mapping(uint32 => uint256) private _dateQuota;
@@ -48,14 +48,13 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
         ITGlod _tglod,
         uint256 _quotaMintPerDate,
         uint256 _quotaUserMintPerDate,
-        uint256 _quotaClaim,
-        bool _verifyQuota
+        uint256 _quotaClaim
     ) {
         tglod = _tglod;
         quotaMintPerDate = _quotaMintPerDate;
         quotaUserMintPerDate = _quotaUserMintPerDate;
-        verifyQuota = _verifyQuota;
         quotaClaim = _quotaClaim;
+        verifyQuota = true;
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _setupRole(SIGNER_ROLE, _msgSender());
         _setupRole(OPERATOR_ROLE, _msgSender());
@@ -96,11 +95,9 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
     function claim(
         uint256 amount,
         uint256 timestamp,
-        string memory claimId,
+        string calldata claimId,
         bytes calldata signature
     ) external nonReentrant {
-        require(amount <= quotaClaim, "RewardManagement: Amount Is Exceed");
-
         require(
             (block.timestamp - timestamp) <= _expiredTime,
             "RewardManagement: Transaction Expired"
@@ -120,6 +117,8 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
 
         uint32 date = _getCurrentDate();
         if (verifyQuota) {
+            require(amount <= quotaClaim, "RewardManagement: Amount Is Exceed");
+
             require(
                 _dateQuota[date] <= quotaMintPerDate,
                 "RewardManagement: Quota Per Date Exceed"
