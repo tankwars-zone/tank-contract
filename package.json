@@ -11,7 +11,8 @@
     "flat:MysteryBox": "npx hardhat flatten ./contracts/nft/MysteryBox.sol  | awk '/SPDX-License-Identifier/&&c++>0 {next} 1' | awk '/pragma experimental ABIEncoderV2;/&&c++>0 {next} 1' > publish/MysteryBox.flat.sol",
     "flat:Tank": "npx hardhat flatten ./contracts/nft/Tank.sol  | awk '/SPDX-License-Identifier/&&c++>0 {next} 1' | awk '/pragma experimental ABIEncoderV2;/&&c++>0 {next} 1' > publish/Tank.flat.sol",
     "flat:TGold": "npx hardhat flatten ./contracts/TGold.sol  | awk '/SPDX-License-Identifier/&&c++>0 {next} 1' | awk '/pragma experimental ABIEncoderV2;/&&c++>0 {next} 1' > publish/TGold.flat.sol",
-    "flat:RewardManagement": "npx hardhat flatten ./contracts/RewardManagement.sol  | awk '/SPDX-License-Identifier/&&c++>0 {next} 1' | awk '/pragma experimental ABIEncoderV2;/&&c++>0 {next} 1' > publish/RewardManagement.flat.sol"
+    "flat:RewardManagement": "npx hardhat flatten ./contracts/RewardManagement.sol  | awk '/SPDX-License-Identifier/&&c++>0 {next} 1' | awk '/pragma experimental ABIEncoderV2;/&&c++>0 {next} 1' > publish/RewardManagement.flat.sol",
+    "flat:Marketplace": "npx hardhat flatten ./contracts/nft/Marketplace.sol  | awk '/SPDX-License-Identifier/&&c++>0 {next} 1' | awk '/pragma experimental ABIEncoderV2;/&&c++>0 {next} 1' > publish/Marketplace.flat.sol"
   },
   "repository": {
     "type": "git",

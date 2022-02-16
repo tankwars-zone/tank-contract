@@ -33,7 +33,7 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
 
     modifier onlyOperator() {
         require(
-            hasRole(SIGNER_ROLE, _msgSender()),
+            hasRole(OPERATOR_ROLE, _msgSender()),
             "RewardManagement: Must Have Operator Role"
         );
         _;
