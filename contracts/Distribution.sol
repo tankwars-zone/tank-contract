@@ -11,8 +11,6 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 contract Distribution is AccessControlUpgradeable, PausableUpgradeable, ReentrancyGuardUpgradeable {
     event Deposit(address indexed _from, address indexed _to, uint256 _value);
     event Withdraw(address indexed _from, address indexed _to, uint256 _value);
-    event AddOperator(address _operator);
-    event RevokeOperator(address _operator);
     event SetClaimableAddresses(address[] indexed _addresses, uint256[] _values);
     event Claim(address indexed _from, address indexed _to, uint256 _value);
     event Received(address sender, uint256 _value);
