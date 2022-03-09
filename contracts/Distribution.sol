@@ -167,6 +167,7 @@ contract Distribution is AccessControlUpgradeable, PausableUpgradeable, Reentran
         uint256 amount = users[msgSender];
         require(tokenAmount >= amount, "Distribution: not enough balance");
         require(amount > 0, "Distribution: reward is zero");
+        users[msgSender] = 0;
         token.transfer(msgSender, amount);
         emit Claim(address(this), msgSender, amount);
     }
