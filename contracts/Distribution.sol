@@ -98,7 +98,7 @@ contract Distribution is AccessControlUpgradeable, PausableUpgradeable, Reentran
         return token.balanceOf(address(this));
     }
 
-    function withdraw(uint256 _amount) external onlyOperator nonReentrant whenNotPaused{
+    function withdraw(uint256 _amount) external onlyAdmin nonReentrant whenNotPaused{
         require(_amount > 0, "Distribution: amount is invalid");
         address msgSender = _msgSender();
         uint256 tokenAmount = token.balanceOf(address(this));
