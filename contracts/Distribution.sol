@@ -4,11 +4,11 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-contract Distribution is AccessControlUpgradeable, PausableUpgradeable, ReentrancyGuard {
-
+contract Distribution is AccessControlUpgradeable, PausableUpgradeable, ReentrancyGuardUpgradeable {
     event Deposit(address indexed _from, address indexed _to, uint256 _value);
     event Withdraw(address indexed _from, address indexed _to, uint256 _value);
     event AddOperator(address _operator);
@@ -22,17 +22,13 @@ contract Distribution is AccessControlUpgradeable, PausableUpgradeable, Reentran
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
+    using SafeERC20 for IERC20;
     IERC20 public token;
 
     mapping(address => bool) private operators;
     uint32 private countOperator;
 
-    struct User {
-        address wallet;
-        uint256 reward;
-    }
-
-    User[] private users;
+    mapping(address=>uint256) public users;
 
     modifier onlyAdmin() {
         require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Distribution: caller is not admin");
@@ -52,7 +48,7 @@ contract Distribution is AccessControlUpgradeable, PausableUpgradeable, Reentran
      * @dev init default params for contract
      */
     function initialize(IERC20 _token) 
-        public 
+        external 
         initializer 
     {
         token = _token;
@@ -71,7 +67,7 @@ contract Distribution is AccessControlUpgradeable, PausableUpgradeable, Reentran
     }
 
     function emergencyWithdraw()
-        public
+        external
         onlyAdmin
     {
         address msgSender = _msgSender();
@@ -87,20 +83,20 @@ contract Distribution is AccessControlUpgradeable, PausableUpgradeable, Reentran
     }
 
     function emergencyWithdraw(IERC20 _token)
-        public
+        external
         onlyAdmin
     {
         address msgSender = _msgSender();
         uint256 tokenAmount = _token.balanceOf(address(this));
         if (tokenAmount > 0) {
-            _token.transfer(msgSender, tokenAmount);
+            _token.safeTransfer(msgSender, tokenAmount);
         }
     }
 
     /**
      * @dev check contract balance
      */
-    function contractBalance() public view returns (uint256 _amount) {
+    function contractBalance() external view returns (uint256 _amount) {
         return token.balanceOf(address(this));
     }
 
@@ -113,28 +109,8 @@ contract Distribution is AccessControlUpgradeable, PausableUpgradeable, Reentran
         emit Withdraw(address(this), msgSender, _amount);
     }
 
-    function addOperator(address _operator)
-        public
-        onlyAdmin 
-    {
-        require(!operators[_operator], "Distribution: This operator is existed!");
-        operators[_operator] = true;
-        _setupRole(OPERATOR_ROLE, _operator);
-        emit AddOperator(_operator);
-    }
-
-    function revokeOperator(address _operator)
-        public
-        onlyAdmin
-    {
-        require(operators[_operator], "Distribution: This operator is not existed!");
-        revokeRole(OPERATOR_ROLE, _operator);
-        operators[_operator] = false;
-        emit RevokeOperator(_operator);
-    }
-
     function checkExistOperator(address _operator)
-        public
+        external
         view
         onlyAdmin
         returns
@@ -143,68 +119,44 @@ contract Distribution is AccessControlUpgradeable, PausableUpgradeable, Reentran
         return operators[_operator];
     }
 
-    function setClaimableAddresses(address[] memory _addresses, uint256[] memory _amounts) 
-        public 
+    function setClaimableAddresses(address[] calldata _addresses, uint256[] calldata _amounts) 
+        external 
         onlyOperator 
     {
         uint256 lenA = _addresses.length;
         uint256 lenT = _amounts.length;
         require(lenA == lenT, "Distribution: claimable is invalid");
-        delete users;
         for (uint256 i = 0; i < lenA; i++){
-            users.push(User({
-                wallet: _addresses[i],
-                reward: _amounts[i]
-            }));
+            users[_addresses[i]] += _amounts[i];
+        }
+    }
+
+    function removeClaimableAddresses(address[] calldata _addresses) 
+        external 
+        onlyOperator 
+    {   
+        uint256 lenA = _addresses.length;
+        for (uint256 i = 0; i < lenA; i++){
+            delete users[_addresses[i]];
         }
     }
 
     function addClaimable(address _wallet, uint256 _amount)
-        public
+        external
         onlyOperator
     {
         require(_amount > 0, "Distribution: amount is invalid");
-        uint256 length = users.length;
-        bool check = false;
-        for (uint256 i = 0; i < length; i++) {
-            if (users[i].wallet == _wallet) {
-                check = true;
-                users[i].reward = users[i].reward + _amount;
-                break;
-            }
-        }
-        if (!check) {
-            users.push(User({
-                wallet: _wallet,
-                reward: _amount
-            }));
-        }
+        users[_wallet] += _amount;
         emit AddClaimable(_wallet,_amount);
     }
 
     function getClaimableAmount() 
-        public 
+        external 
         view
         returns (uint256 _amount)
     {
         address msgSender = _msgSender();
-        _amount = 0;
-        for (uint256 i = 0; i < users.length; i++) {
-            if (users[i].wallet == msgSender) {
-                _amount = users[i].reward;
-                break;
-            }
-        }
-        return _amount;
-    }
-
-    function getUsers() 
-        public 
-        view
-        onlyOperator
-        returns (User[] memory)
-    {
-        return users;
+        return users[msgSender];
     }
 
     function claim() 
@@ -214,24 +166,17 @@ contract Distribution is AccessControlUpgradeable, PausableUpgradeable, Reentran
     {   
         address msgSender = _msgSender();
         uint256 tokenAmount = token.balanceOf(address(this));
-        uint256 amount = 0;
-        for (uint256 i = 0; i < users.length; i++) {
-            if (users[i].wallet == msgSender) {
-                amount = users[i].reward;
-                require(tokenAmount >= amount, "Distribution: not enough balance");
-                users[i].reward = 0;
-                break;
-            }
-        }
+        uint256 amount = users[msgSender];
+        require(tokenAmount >= amount, "Distribution: not enough balance");
         require(amount > 0, "Distribution: reward is zero");
         token.transfer(msgSender, amount);
         emit Claim(address(this), msgSender, amount);
     }
-    function pause() public onlyPauser {
+    function pause() external onlyPauser {
         _pause();
     }
 
-    function unpause() public onlyPauser {
+    function unpause() external onlyPauser {
         _unpause();
     }
 }
