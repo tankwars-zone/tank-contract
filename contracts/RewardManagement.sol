@@ -120,12 +120,12 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
             require(amount <= quotaClaim, "RewardManagement: Amount Is Exceed");
 
             require(
-                _dateQuota[date] <= quotaMintPerDate,
+                _dateQuota[date] + amount <= quotaMintPerDate,
                 "RewardManagement: Quota Per Date Exceed"
             );
 
             require(
-                _userQuota[_msgSender()][date] <= quotaUserMintPerDate,
+                _userQuota[_msgSender()][date] + amount <= quotaUserMintPerDate,
                 "RewardManagement: Quota User Per Date Exceed"
             );
         }
