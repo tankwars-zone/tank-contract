@@ -23,9 +23,6 @@ contract Distribution is AccessControlUpgradeable, PausableUpgradeable, Reentran
     using SafeERC20 for IERC20;
     IERC20 public token;
 
-    mapping(address => bool) private operators;
-    uint32 private countOperator;
-
     mapping(address=>uint256) public users;
 
     modifier onlyAdmin() {
@@ -107,16 +104,6 @@ contract Distribution is AccessControlUpgradeable, PausableUpgradeable, Reentran
         emit Withdraw(address(this), msgSender, _amount);
     }
 
-    function checkExistOperator(address _operator)
-        external
-        view
-        onlyAdmin
-        returns
-        (bool)
-    {
-        return operators[_operator];
-    }
-
     function setClaimableAddresses(address[] calldata _addresses, uint256[] calldata _amounts) 
         external 
         onlyOperator 
@@ -127,6 +114,7 @@ contract Distribution is AccessControlUpgradeable, PausableUpgradeable, Reentran
         for (uint256 i = 0; i < lenA; i++){
             users[_addresses[i]] += _amounts[i];
         }
+        emit SetClaimableAddresses(_addresses, _amounts);
     }
 
     function removeClaimableAddresses(address[] calldata _addresses) 
