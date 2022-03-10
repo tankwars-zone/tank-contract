@@ -136,13 +136,12 @@ contract Distribution is AccessControlUpgradeable, PausableUpgradeable, Reentran
         emit AddClaimable(_wallet,_amount);
     }
 
-    function getClaimableAmount() 
+    function getClaimableAmount(address _address) 
         external 
         view
         returns (uint256 _amount)
     {
-        address msgSender = _msgSender();
-        return users[msgSender];
+        return users[_address];
     }
 
     function claim() 
