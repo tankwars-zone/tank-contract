@@ -1044,13 +1044,13 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
     using SafeMath for uint32;
     using Signature for bytes32;
 
-    event ClaimReward(address, uint256, string);
+    event ClaimReward(address user, uint256 amount, string claimId);
 
     uint256 public constant SECOND_PER_DATE = 86400;
     bytes32 public constant SIGNER_ROLE = keccak256("SIGNER_ROLE");
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
-    ITGlod tglod;
+    ITGlod public tglod;
     uint256 private _expiredTime = 300;
     mapping(address => mapping(uint32 => uint256)) private _userQuota;
     mapping(uint32 => uint256) private _dateQuota;
@@ -1062,7 +1062,7 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
 
     modifier onlyOperator() {
         require(
-            hasRole(SIGNER_ROLE, _msgSender()),
+            hasRole(OPERATOR_ROLE, _msgSender()),
             "RewardManagement: Must Have Operator Role"
         );
         _;
