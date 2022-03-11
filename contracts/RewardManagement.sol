@@ -4,13 +4,18 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
 import "./libs/Signature.sol";
 
 interface ITGlod {
     function mint(address to, uint256 amount) external;
 }
 
-contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
+contract RewardManagement is
+    AccessControlEnumerable,
+    ReentrancyGuard,
+    Pausable
+{
     using SafeMath for uint256;
     using SafeMath for uint32;
     using Signature for bytes32;
@@ -35,6 +40,14 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
         require(
             hasRole(OPERATOR_ROLE, _msgSender()),
             "RewardManagement: Must Have Operator Role"
+        );
+        _;
+    }
+
+    modifier onlyAdmin() {
+        require(
+            hasRole(DEFAULT_ADMIN_ROLE, _msgSender()),
+            "RewardManagement: Must Have Admin Role"
         );
         _;
     }
@@ -68,6 +81,14 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
         tglod = _tglod;
     }
 
+    function pause() public onlyAdmin {
+        _pause();
+    }
+
+    function unpause() public onlyAdmin {
+        _unpause();
+    }
+
     function setQuotaMintPerDate(uint256 amount) external onlyOperator {
         require(amount > 0, "RewardManagement: Amount Invalid");
         quotaUserMintPerDate = amount;
@@ -97,7 +118,7 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
         uint256 timestamp,
         string calldata claimId,
         bytes calldata signature
-    ) external nonReentrant {
+    ) external nonReentrant whenNotPaused {
         require(
             (block.timestamp - timestamp) <= _expiredTime,
             "RewardManagement: Transaction Expired"
