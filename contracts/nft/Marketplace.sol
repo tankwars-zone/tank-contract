@@ -192,11 +192,17 @@ contract Marketplace is
         address erc721,
         address erc20,
         uint256 tokenId,
-        uint256 price
+        uint256 price,
+        address rentingContract
     ) public whenNotPaused nonReentrant inWhitelist(erc721, erc20) {
         address msgSender = _msgSender();
 
         require(price > 0, "Marketplace: price must be greater than 0");
+
+        bool isRenting = IRenting(rentingContract).isRenting(erc721, tokenId);
+
+        require(isRenting == false, "Marketplace: erc721 is renting");
+
 
         Ask memory info = asks[erc721][tokenId];
 
@@ -239,9 +245,13 @@ contract Marketplace is
         address erc721,
         address erc20,
         uint256 tokenId,
-        uint256 price
+        uint256 price,
+        address rentingContract
     ) public payable whenNotPaused nonReentrant inWhitelist(erc721, erc20) {
         require(price > 0, "Marketplace: price must be greater than 0");
+
+        bool isRenting = IRenting(rentingContract).isRenting(erc721, tokenId);
+        require(isRenting == false, "Marketplace: erc721 is renting");
 
         address msgSender = _msgSender();
 
@@ -455,4 +465,8 @@ contract Marketplace is
     {
         return (price * feePercent) / ONE_HUNDRED_PERCENT;
     }
+}
+
+interface IRenting {
+    function isRenting(address erc721, uint256 tokenId) external view returns(bool);
 }
