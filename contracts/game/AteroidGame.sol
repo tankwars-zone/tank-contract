@@ -14,14 +14,16 @@ contract AteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable,
 
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
+    uint256 public constant HUNDRED_PERCENT = 10000;
+
     uint256 public constant ASTEROID_MOVING = 1;
     uint256 public constant ASTEROID_COLLIDED = 2;
     uint256 public constant ASTEROID_EXPLODED = 3;
 
     event TreasuryUpdated(address treasury);
 
-    event RoomCreated(uint256 roomId, address token, uint256 searchFee);
-    event RoomUpdated(uint256 roomId, address token, uint256 searchFee);
+    event RoomCreated(uint256 roomId, address token, uint256 searchFee, uint256 numWinners, uint256 winnerRewardPercent, uint256 finderRewardPercent);
+    event RoomUpdated(uint256 roomId, address token, uint256 searchFee, uint256 numWinners, uint256 winnerRewardPercent, uint256 finderRewardPercent);
     event RoomStatusUpdated(uint256 roomId, bool status);
 
     event RocketUpdated(uint256 roomId, uint256 rocketId, uint256 delayTime, uint256 price);
@@ -37,6 +39,9 @@ contract AteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable,
         uint256 currentAsteroid;
         uint256 searchFee;
         bool status;
+        uint256 numWinners;
+        uint256 winnerRewardPercent;
+        uint256 finderRewardPercent;
     }
 
     struct Asteroid {
@@ -44,6 +49,9 @@ contract AteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable,
         uint256 reward;         // wei
         uint256 collisionAt;    // second
         uint256 status;
+        uint256 numWinners;
+        uint256 winnerRewardPercent;
+        uint256 finderRewardPercent;
     }
 
     struct Rocket {
@@ -53,24 +61,30 @@ contract AteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable,
 
     struct Shooting {
         address account;
-        uint64 rocketId;
-        uint64 delayTime;
-        uint128 rocketPrice;
+        uint256 rocketId;
+        uint256 delayTime;
+        uint256 rocketPrice;
     }
 
+    // room id => room information
     mapping(uint256 => Room) public rooms;
 
+    // room id => asteroid id => asteroid information
     mapping(uint256 => mapping(uint256 => Asteroid)) public asteroids;
 
+    // room id => rocket id => rocket information
     mapping(uint256 => mapping(uint256 => Rocket)) public  rockets;
 
+    // room id => asteroid id => user address => status true|false
     mapping(uint256 => mapping(uint256 => mapping(address => bool))) public isPlayer;
 
-    mapping(uint256 => mapping(uint256 => Shooting[])) private _shootings;
+    // room id => asteroid id => array of shooting information
+    mapping(uint256 => mapping(uint256 => Shooting[])) public shootings;
 
-    mapping(uint256 => mapping(uint256 => uint256)) public totalPlayers;
+    // room id => asteroid id => array of user address
+    mapping(uint256 => mapping(uint256 => address[])) public players;
 
-    uint256 public currentRoom;
+    uint256 public totalRooms;
 
     address public treasury;
 
@@ -110,6 +124,17 @@ contract AteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable,
         treasury = msgSender;
     }
 
+    function setTreasury(address _addr)
+        external
+        onlyAdmin
+    {
+        require(_addr != address(0), "AteroidGame: address is invalid");
+
+        treasury = _addr;
+
+        emit TreasuryUpdated(_addr);
+    }
+
     function pause()
         external
         onlyOperator
@@ -124,18 +149,7 @@ contract AteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable,
         _unpause();
     }
 
-    function setTreasury(address _addr)
-        external
-        onlyAdmin
-    {
-        require(_addr != address(0), "AteroidGame: address is invalid");
-
-        treasury = _addr;
-
-        emit TreasuryUpdated(_addr);
-    }
-
-    function createRoom(address _token, uint256 _searchFee)
+    function createRoom(address _token, uint256 _searchFee, uint256 _numWinners, uint256 _winnerRewardPercent, uint256 _finderRewardPercent)
         external
         onlyOperator
     {
@@ -143,14 +157,18 @@ contract AteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable,
 
         require(_searchFee > 0, "AteroidGame: search fee is invalid");
 
-        uint256 roomId = ++currentRoom;
+        require(_numWinners > 0, "AteroidGame: number of winners is invalid");
 
-        rooms[roomId] = Room(IERC20(_token), 1, _searchFee, true);
+        require(_winnerRewardPercent + _finderRewardPercent <= HUNDRED_PERCENT, "AteroidGame: percent is invalid");
 
-        emit RoomCreated(roomId, _token, _searchFee);
+        uint256 roomId = ++totalRooms;
+
+        rooms[roomId] = Room(IERC20(_token), 1, _searchFee, true, _numWinners, _winnerRewardPercent, _finderRewardPercent);
+
+        emit RoomCreated(roomId, _token, _searchFee, _numWinners, _winnerRewardPercent, _finderRewardPercent);
     }
 
-    function updateRoom(uint256 _roomId, address _token, uint256 _searchFee)
+    function updateRoom(uint256 _roomId, address _token, uint256 _searchFee, uint256 _numWinners, uint256 _winnerRewardPercent, uint256 _finderRewardPercent)
         external
         onlyOperator
         roomExists(_roomId)
@@ -158,6 +176,10 @@ contract AteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable,
         require(_token != address(0), "AteroidGame: address is invalid");
 
         require(_searchFee > 0, "AteroidGame: search fee is invalid");
+
+        require(_numWinners > 0, "AteroidGame: number of winners is invalid");
+
+        require(_winnerRewardPercent + _finderRewardPercent <= HUNDRED_PERCENT, "AteroidGame: percent is invalid");
 
         Room storage room = rooms[_roomId];
 
@@ -173,7 +195,19 @@ contract AteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable,
             room.searchFee = _searchFee;
         }
 
-        emit RoomUpdated(_roomId, _token, _searchFee);
+        if (room.numWinners != _numWinners) {
+            room.numWinners = _numWinners;
+        }
+
+        if (room.winnerRewardPercent != _winnerRewardPercent) {
+            room.winnerRewardPercent = _winnerRewardPercent;
+        }
+
+        if (room.finderRewardPercent != _finderRewardPercent) {
+            room.finderRewardPercent = _finderRewardPercent;
+        }
+
+        emit RoomUpdated(_roomId, _token, _searchFee, _numWinners, _winnerRewardPercent, _finderRewardPercent);
     }
 
     function updateRoomStatus(uint256 _roomId, bool _status)
@@ -184,6 +218,32 @@ contract AteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable,
         rooms[_roomId].status = _status;
 
         emit RoomStatusUpdated(_roomId, _status);
+    }
+
+    function getRooms(uint256 _offset, uint256 _limit)
+        external
+        view
+        returns(Room[] memory data)
+    {
+        uint256 max = totalRooms;
+
+        if (_offset >= max) {
+            return data;
+        }
+
+        if (_offset + _limit < max) {
+            max = _offset + _limit;
+        }
+
+        data = new Room[](max - _offset);
+
+        uint256 cnt = 0;
+
+        for (uint256 i = _offset; i < max; i++) {
+            data[cnt++] = rooms[i];
+        }
+
+        return data;
     }
 
     function setRocket(uint256 _roomId, uint256 _rocketId, uint256 _delayTime, uint256 _price)
@@ -214,58 +274,6 @@ contract AteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable,
         returns(uint256)
     {
         return uint256(keccak256(abi.encodePacked(block.difficulty, block.timestamp, block.gaslimit)));
-    }
-
-    function getRooms(uint256 _offset, uint256 _limit)
-        external
-        view
-        returns(Room[] memory data)
-    {
-        uint256 max = currentRoom;
-
-        if (_offset >= max) {
-            return data;
-        }
-
-        if (_offset + _limit < max) {
-            max = _offset + _limit;
-        }
-
-        data = new Room[](max - _offset);
-
-        uint256 cnt = 0;
-
-        for (uint256 i = _offset; i < max; i++) {
-            data[cnt++] = rooms[i];
-        }
-
-        return data;
-    }
-
-    function getAsteroids(uint256 _roomId, uint256 _offset, uint256 _limit)
-        external
-        view
-        returns(Asteroid[] memory data)
-    {
-        uint256 max = rooms[_roomId].currentAsteroid;
-
-        if (_offset >= max) {
-            return data;
-        }
-
-        if (_offset + _limit < max) {
-            max = _offset + _limit;
-        }
-
-        data = new Asteroid[](max - _offset);
-
-        uint256 cnt = 0;
-
-        for (uint256 i = _offset; i < max; i++) {
-            data[cnt++] = asteroids[_roomId][i];
-        }
-
-        return data;
     }
 
     function search(uint256 _roomId)
@@ -303,13 +311,40 @@ contract AteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable,
 
         } else {
             asteroid.owner = msgSender;
-
+            asteroid.numWinners = room.numWinners;
+            asteroid.winnerRewardPercent = room.winnerRewardPercent;
+            asteroid.finderRewardPercent = room.finderRewardPercent;
             asteroid.collisionAt = block.timestamp + 600;
-
             asteroid.status = ASTEROID_MOVING;
 
             emit AsteroidFound(_roomId, asteroidId, msgSender, room.searchFee);
         }
+    }
+
+    function getAsteroids(uint256 _roomId, uint256 _offset, uint256 _limit)
+        external
+        view
+        returns(Asteroid[] memory data)
+    {
+        uint256 max = rooms[_roomId].currentAsteroid;
+
+        if (_offset >= max) {
+            return data;
+        }
+
+        if (_offset + _limit < max) {
+            max = _offset + _limit;
+        }
+
+        data = new Asteroid[](max - _offset);
+
+        uint256 cnt = 0;
+
+        for (uint256 i = _offset; i < max; i++) {
+            data[cnt++] = asteroids[_roomId][i];
+        }
+
+        return data;
     }
 
     function shoot(uint256 _roomId, uint256 _rocketId)
@@ -336,7 +371,7 @@ contract AteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable,
 
         room.token.safeTransferFrom(msgSender, address(this), rocket.price);
 
-        _shootings[_roomId][asteroidId].push(Shooting(msgSender, uint64(_rocketId), uint64(rocket.delayTime), uint128(rocket.price)));
+        shootings[_roomId][asteroidId].push(Shooting(msgSender, _rocketId, rocket.delayTime, rocket.price));
 
         emit Shoot(_roomId, asteroidId, _rocketId, msgSender, rocket.price, rocket.delayTime);
 
@@ -350,18 +385,10 @@ contract AteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable,
         }
 
         if (!isPlayer[_roomId][asteroidId][msgSender]) {
-            totalPlayers[_roomId][asteroidId]++;
+            players[_roomId][asteroidId].push(msgSender);
 
             isPlayer[_roomId][asteroidId][msgSender] = true;
         }
-    }
-
-    function getTotalShootings(uint256 _roomId, uint256 _asteroidId)
-        external
-        view
-        returns(uint256)
-    {
-        return _shootings[_roomId][_asteroidId].length;
     }
 
     function getShootings(uint256 _roomId, uint256 _asteroidId, uint256 _offset, uint256 _limit)
@@ -369,7 +396,7 @@ contract AteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable,
         view
         returns(Shooting[] memory data)
     {
-        uint256 max = _shootings[_roomId][_asteroidId].length;
+        uint256 max = shootings[_roomId][_asteroidId].length;
 
         if (_offset >= max) {
             return data;
@@ -384,10 +411,34 @@ contract AteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable,
         uint256 cnt = 0;
 
         for (uint256 i = _offset; i < max; i++) {
-            data[cnt++] = _shootings[_roomId][_asteroidId][i];
+            data[cnt++] = shootings[_roomId][_asteroidId][i];
         }
 
         return data;
+    }
+
+    function totalShootings(uint256 _roomId, uint256 _asteroidId)
+        external
+        view
+        returns(uint256)
+    {
+        return shootings[_roomId][_asteroidId].length;
+    }
+
+    function totalPlayers(uint256 _roomId, uint256 _asteroidId)
+        external
+        view
+        returns(uint256)
+    {
+        return players[_roomId][_asteroidId].length;
+    }
+
+    function getWinners(uint256 _roomId, uint256 _asteroidId)
+        external
+        view
+        returns(address[] memory winners, uint256[] memory rewards)
+    {
+        // Asteroid memory asteroid = asteroids[_roomId][_asteroidId];
     }
 
 }
