@@ -51,7 +51,7 @@ contract AteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable,
         uint256 price;          // wei
     }
 
-    struct ShootInfo {
+    struct Shooting {
         address account;
         uint64 rocketId;
         uint64 delayTime;
@@ -66,7 +66,7 @@ contract AteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable,
 
     mapping(uint256 => mapping(uint256 => mapping(address => bool))) public isPlayer;
 
-    mapping(uint256 => mapping(uint256 => ShootInfo[])) private _shoots;
+    mapping(uint256 => mapping(uint256 => Shooting[])) private _shootings;
 
     mapping(uint256 => mapping(uint256 => uint256)) public totalPlayers;
 
@@ -280,11 +280,11 @@ contract AteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable,
 
         Asteroid storage asteroid = asteroids[_roomId][asteroidId];
 
-        if (asteroid.status != 0) {
-            if (asteroid.status == ASTEROID_MOVING && asteroid.collisionAt <= block.timestamp) {
-                asteroid.status = ASTEROID_COLLIDED;
-            }
+        if (asteroid.status == ASTEROID_MOVING && asteroid.collisionAt <= block.timestamp) {
+            asteroid.status = ASTEROID_COLLIDED;
+        }
 
+        if (asteroid.status == ASTEROID_COLLIDED || asteroid.status == ASTEROID_EXPLODED) {
             asteroidId = ++room.currentAsteroid;
 
             asteroid = asteroids[_roomId][asteroidId];
@@ -336,7 +336,7 @@ contract AteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable,
 
         room.token.safeTransferFrom(msgSender, address(this), rocket.price);
 
-        _shoots[_roomId][asteroidId].push(ShootInfo(msgSender, uint64(_rocketId), uint64(rocket.delayTime), uint128(rocket.price)));
+        _shootings[_roomId][asteroidId].push(Shooting(msgSender, uint64(_rocketId), uint64(rocket.delayTime), uint128(rocket.price)));
 
         emit Shoot(_roomId, asteroidId, _rocketId, msgSender, rocket.price, rocket.delayTime);
 
@@ -354,6 +354,40 @@ contract AteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable,
 
             isPlayer[_roomId][asteroidId][msgSender] = true;
         }
+    }
+
+    function getTotalShootings(uint256 _roomId, uint256 _asteroidId)
+        external
+        view
+        returns(uint256)
+    {
+        return _shootings[_roomId][_asteroidId].length;
+    }
+
+    function getShootings(uint256 _roomId, uint256 _asteroidId, uint256 _offset, uint256 _limit)
+        external
+        view
+        returns(Shooting[] memory data)
+    {
+        uint256 max = _shootings[_roomId][_asteroidId].length;
+
+        if (_offset >= max) {
+            return data;
+        }
+
+        if (_offset + _limit < max) {
+            max = _offset + _limit;
+        }
+
+        data = new Shooting[](max - _offset);
+
+        uint256 cnt = 0;
+
+        for (uint256 i = _offset; i < max; i++) {
+            data[cnt++] = _shootings[_roomId][_asteroidId][i];
+        }
+
+        return data;
     }
 
 }
