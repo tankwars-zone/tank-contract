@@ -79,6 +79,8 @@ contract Marketplace is
         uint256 sellerPayment
     );
 
+    event RentingContractUpdated(address renting);
+
     uint256 public systemFeePercent;
 
     address public adminWallet;
@@ -112,6 +114,8 @@ contract Marketplace is
 
     // erc721 address => token id => sell order
     mapping(address => mapping(uint256 => Ask)) public asks;
+
+    address public rentingContract;
 
     modifier inWhitelist(address erc721, address erc20) {
         require(
@@ -148,6 +152,14 @@ contract Marketplace is
         adminWallet = wallet;
 
         emit AdminWalletUpdated(wallet);
+    }
+
+    function setRentingContract(address renting) public onlyOwner {
+        require(renting != address(0), "Marketplace: address is invalid");
+
+        rentingContract = renting;
+
+        emit RentingContractUpdated(renting);
     }
 
     function updateErc20Whitelist(address[] memory erc20s, bool status)
@@ -192,8 +204,7 @@ contract Marketplace is
         address erc721,
         address erc20,
         uint256 tokenId,
-        uint256 price,
-        address rentingContract
+        uint256 price
     ) public whenNotPaused nonReentrant inWhitelist(erc721, erc20) {
         address msgSender = _msgSender();
 
@@ -245,8 +256,7 @@ contract Marketplace is
         address erc721,
         address erc20,
         uint256 tokenId,
-        uint256 price,
-        address rentingContract
+        uint256 price
     ) public payable whenNotPaused nonReentrant inWhitelist(erc721, erc20) {
         require(price > 0, "Marketplace: price must be greater than 0");
 
