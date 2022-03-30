@@ -1,20 +1,30 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 import "./libs/Signature.sol";
 
 interface ITGlod {
     function mint(address to, uint256 amount) external;
+
+    function transferFrom(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) external returns (bool);
 }
 
 contract RewardManagement is
-    AccessControlEnumerable,
-    ReentrancyGuard,
-    Pausable
+    AccessControlEnumerableUpgradeable,
+    ReentrancyGuardUpgradeable,
+    PausableUpgradeable
 {
     using SafeMath for uint256;
     using SafeMath for uint32;
@@ -22,11 +32,15 @@ contract RewardManagement is
 
     event ClaimReward(address user, uint256 amount, string claimId);
 
-    uint256 public constant SECOND_PER_DATE = 86400;
+    event FixTank(address user, uint256 tankId, uint256 price);
+
+    uint256 public constant SECONDS_PER_DATE = 86400;
     bytes32 public constant SIGNER_ROLE = keccak256("SIGNER_ROLE");
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
     ITGlod public tglod;
+    IERC721 public tank;
+    address public adminWallet;
     uint256 private _expiredTime = 300;
     mapping(address => mapping(uint32 => uint256)) private _userQuota;
     mapping(uint32 => uint256) private _dateQuota;
@@ -34,6 +48,7 @@ contract RewardManagement is
     uint256 public quotaMintPerDate;
     uint256 public quotaUserMintPerDate;
     uint256 public quotaClaim;
+    uint256 public priceFixTank;
     bool public verifyQuota;
 
     modifier onlyOperator() {
@@ -57,20 +72,29 @@ contract RewardManagement is
         _;
     }
 
-    constructor(
+    function initialize(
         ITGlod _tglod,
+        IERC721 _tank,
+        address _adminWallet,
         uint256 _quotaMintPerDate,
         uint256 _quotaUserMintPerDate,
-        uint256 _quotaClaim
-    ) {
+        uint256 _quotaClaim,
+        uint256 _priceFixTank
+    ) public initializer {
+        __AccessControlEnumerable_init();
+        __ReentrancyGuard_init();
+        __Pausable_init();
+        _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
+        _setupRole(SIGNER_ROLE, _msgSender());
+        _setupRole(OPERATOR_ROLE, _msgSender());
         tglod = _tglod;
+        tank = _tank;
         quotaMintPerDate = _quotaMintPerDate;
         quotaUserMintPerDate = _quotaUserMintPerDate;
         quotaClaim = _quotaClaim;
         verifyQuota = true;
-        _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
-        _setupRole(SIGNER_ROLE, _msgSender());
-        _setupRole(OPERATOR_ROLE, _msgSender());
+        priceFixTank = _priceFixTank;
+        adminWallet = _adminWallet;
     }
 
     function setTgold(ITGlod _tglod)
@@ -87,6 +111,14 @@ contract RewardManagement is
 
     function unpause() public onlyAdmin {
         _unpause();
+    }
+
+    function setAdminWallet(address _adminWallet)
+        external
+        onlyAdmin
+        notNull(address(_adminWallet))
+    {
+        adminWallet = _adminWallet;
     }
 
     function setQuotaMintPerDate(uint256 amount) external onlyOperator {
@@ -111,6 +143,14 @@ contract RewardManagement is
 
     function setVerifyQuota(bool status) external onlyOperator {
         verifyQuota = status;
+    }
+
+    function setTank(IERC721 _tank) external onlyOperator {
+        tank = _tank;
+    }
+
+    function setPriceFixTank(uint256 _price) external onlyOperator {
+        priceFixTank = _price;
     }
 
     function claim(
@@ -158,6 +198,16 @@ contract RewardManagement is
         emit ClaimReward(_msgSender(), amount, claimId);
     }
 
+    function fixTank(uint256 tankId) external {
+        require(
+            tank.ownerOf(tankId) == _msgSender(),
+            "RewardManagement: must be owner token"
+        );
+
+        tglod.transferFrom(_msgSender(), adminWallet, priceFixTank);
+        emit FixTank(_msgSender(), tankId, priceFixTank);
+    }
+
     function getRemainQuota() external view returns (uint256) {
         uint32 date = _getCurrentDate();
         return quotaMintPerDate - _dateQuota[date];
@@ -174,6 +224,6 @@ contract RewardManagement is
     }
 
     function _getCurrentDate() internal view returns (uint32) {
-        return uint32(block.timestamp / SECOND_PER_DATE);
+        return uint32(block.timestamp / SECONDS_PER_DATE);
     }
 }
