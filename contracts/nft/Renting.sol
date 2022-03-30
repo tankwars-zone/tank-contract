@@ -17,16 +17,16 @@ contract Renting is
     event Erc721WhitelistUpdated(address[] erc721s, bool status);
 
     event RentCreated(
-        address erc721,        
+        address erc721,
         uint256 tokenId,
         address owner,
-        address renter,        
-        uint256 percentOwner,        
+        address renter,
+        uint256 percentOwner,
         uint256 percentRenter
     );
 
     event RentCanceled(
-        address erc721,        
+        address erc721,
         uint256 tokenId,
         address owner,
         address renter
