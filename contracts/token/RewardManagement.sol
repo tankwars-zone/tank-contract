@@ -9,7 +9,7 @@ import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgrad
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import "./libs/Signature.sol";
+import "../libs/Signature.sol";
 
 interface ITGlod {
     function mint(address to, uint256 amount) external;
@@ -54,7 +54,7 @@ contract RewardManagement is
     modifier onlyOperator() {
         require(
             hasRole(OPERATOR_ROLE, _msgSender()),
-            "RewardManagement: Must Have Operator Role"
+            "RewardManagement: Must Be Operator Role"
         );
         _;
     }
@@ -62,7 +62,7 @@ contract RewardManagement is
     modifier onlyAdmin() {
         require(
             hasRole(DEFAULT_ADMIN_ROLE, _msgSender()),
-            "RewardManagement: Must Have Admin Role"
+            "RewardManagement: Must Be Admin Role"
         );
         _;
     }
@@ -75,11 +75,7 @@ contract RewardManagement is
     function initialize(
         ITGlod _tglod,
         IERC721 _tank,
-        address _adminWallet,
-        uint256 _quotaMintPerDate,
-        uint256 _quotaUserMintPerDate,
-        uint256 _quotaClaim,
-        uint256 _priceFixTank
+        address _adminWallet
     ) public initializer {
         __AccessControlEnumerable_init();
         __ReentrancyGuard_init();
@@ -89,11 +85,7 @@ contract RewardManagement is
         _setupRole(OPERATOR_ROLE, _msgSender());
         tglod = _tglod;
         tank = _tank;
-        quotaMintPerDate = _quotaMintPerDate;
-        quotaUserMintPerDate = _quotaUserMintPerDate;
-        quotaClaim = _quotaClaim;
         verifyQuota = true;
-        priceFixTank = _priceFixTank;
         adminWallet = _adminWallet;
     }
 
@@ -121,19 +113,14 @@ contract RewardManagement is
         adminWallet = _adminWallet;
     }
 
-    function setQuotaMintPerDate(uint256 amount) external onlyOperator {
-        require(amount > 0, "RewardManagement: Amount Invalid");
-        quotaUserMintPerDate = amount;
-    }
-
-    function setQuotaUserMintPerDate(uint256 amount) external onlyOperator {
-        require(amount > 0, "RewardManagement: Amount Invalid");
-        quotaUserMintPerDate = amount;
-    }
-
-    function setQuotaClaim(uint256 amount) external onlyOperator {
-        require(amount > 0, "RewardManagement: Amount Invalid");
-        quotaClaim = amount;
+    function setQuota(
+        uint256 _quotaMintPerDate,
+        uint256 _quotaUserMintPerDate,
+        uint256 _quotaClaim
+    ) external onlyOperator {
+        quotaMintPerDate = _quotaMintPerDate;
+        quotaUserMintPerDate = _quotaUserMintPerDate;
+        quotaClaim = _quotaClaim;
     }
 
     function setExpiredTime(uint256 expiredTime) external onlyOperator {
@@ -199,6 +186,10 @@ contract RewardManagement is
     }
 
     function fixTank(uint256 tankId) external {
+        require(
+            priceFixTank > 0,
+            "RewardManagement: Must be set fix tank price"
+        );
         require(
             tank.ownerOf(tankId) == _msgSender(),
             "RewardManagement: must be owner token"
