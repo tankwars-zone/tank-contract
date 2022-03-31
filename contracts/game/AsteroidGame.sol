@@ -14,7 +14,7 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
-    uint256 public constant HUNDRED_PERCENT = 10000;
+    uint256 public constant HUNDRED_PERCENT = 10000; // 100%
 
     uint256 public constant ASTEROID_MOVING = 1;
     uint256 public constant ASTEROID_COLLIDED = 2;
@@ -54,6 +54,8 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
         uint256 totalPrizes;
         uint256 winnerRewardPercent;
         uint256 ownerRewardPercent;
+        uint256 shootingWeight;
+        uint256 searchingWeight;
     }
 
     struct Rocket {
@@ -98,6 +100,8 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
     uint256 public minLifeTime;
     uint256 public maxLifeTime;
+    uint256 public minWeight;
+    uint256 public maxWeight;
 
     modifier onlyAdmin() {
         require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "AsteroidGame: caller is not admin");
@@ -136,6 +140,9 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
         minLifeTime = 1800; // 30 minutes
         maxLifeTime = 3600; // 60 minutes
+
+        minWeight = 1000; // 10.00
+        maxWeight = 3000; // 30.00
     }
 
     function setTreasury(address _addr)
@@ -149,11 +156,13 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
         emit TreasuryUpdated(_addr);
     }
 
-    function setConfig(uint256 _minLifeTime, uint256 _maxLifeTime)
+    function setConfig(uint256 _minLifeTime, uint256 _maxLifeTime, uint256 _minWeight, uint256 _maxWeight)
         external
         onlyOperator
     {
-        require(_minLifeTime > 0 && _minLifeTime < _maxLifeTime, "AsteroidGame: min or max value is invalid");
+        require(_minLifeTime > 0 && _minLifeTime < _maxLifeTime, "AsteroidGame: min or max time is invalid");
+
+        require(_minWeight < _maxWeight && _maxWeight <= HUNDRED_PERCENT, "AsteroidGame: min or max weight is invalid");
 
         if (minLifeTime != _minLifeTime) {
             minLifeTime = _minLifeTime;
@@ -161,6 +170,14 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
         if (maxLifeTime != _maxLifeTime) {
             maxLifeTime = _maxLifeTime;
+        }
+
+        if (minWeight != _minWeight) {
+            minWeight = _minWeight;
+        }
+
+        if (maxWeight != _maxWeight) {
+            maxWeight = _maxWeight;
         }
     }
 
@@ -337,7 +354,14 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
         asteroid.reward += room.searchFee;
 
-        if (_random(1, 100) % 9 != 0) {
+        uint256 weight = asteroid.searchingWeight + minWeight;
+
+        // Generates number in range 1.00 to 100.00
+        if (_random(100, 10000) > weight) {
+            if (weight + 1 < maxWeight) {
+                asteroid.searchingWeight += 1; // 0.01
+            }
+
             emit AsteroidNotFound(_roomId, asteroidId, msgSender, room.searchFee);
 
         } else {
@@ -406,7 +430,14 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
         emit Shoot(_roomId, asteroidId, _rocketId, msgSender, rocket.price, rocket.delayTime);
 
-        if (_random(1, 100) % 9 != 0) {
+        uint256 weight = asteroid.shootingWeight + minWeight;
+
+        // Generates number in range 1.00 to 100.00
+        if (_random(100, 10000) > weight) {
+            if (weight + 1 < maxWeight) {
+                asteroid.shootingWeight += 1; // 0.01
+            }
+
             asteroid.collisionAt += rocket.delayTime;
 
         } else {
@@ -513,11 +544,13 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
         winners = _winners[_roomId][_asteroidId];
 
-        if (winners.length > 0) {
-            winnerReward = asteroid.reward * asteroid.winnerRewardPercent / HUNDRED_PERCENT / winners.length;
+        if (winners.length > 0 && asteroid.winnerRewardPercent > asteroid.shootingWeight) {
+            winnerReward = asteroid.reward * (asteroid.winnerRewardPercent - asteroid.shootingWeight) / HUNDRED_PERCENT / winners.length;
         }
 
-        ownerReward = asteroid.reward * asteroid.ownerRewardPercent / HUNDRED_PERCENT;
+        if (asteroid.ownerRewardPercent > asteroid.searchingWeight) {
+            ownerReward = asteroid.reward * (asteroid.ownerRewardPercent - asteroid.searchingWeight) / HUNDRED_PERCENT;
+        }
 
         systemFee = asteroid.reward - (winnerReward + ownerReward);
     }
