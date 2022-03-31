@@ -34,6 +34,8 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
     event Shoot(uint256 roomId, uint256 asteroidId, uint256 rocketId, address user, uint256 rocketPrice, uint256 delayTime);
 
+    event Payment(uint256 roomId, uint256 asteroidId, uint256 winnerReward, uint256 ownerReward, uint256 systemFee);
+
     struct Room {
         IERC20 token;
         uint256 currentAsteroid;
@@ -75,7 +77,7 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
     // room id => rocket id => rocket information
     mapping(uint256 => mapping(uint256 => Rocket)) public rockets;
 
-    // room id => asteroid id => user address => status true or false
+    // room id => asteroid id => user address => true value if is player
     mapping(uint256 => mapping(uint256 => mapping(address => bool))) public isPlayer;
 
     // room id => asteroid id => array of shooting information
@@ -87,9 +89,15 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
     // room id => asteroid id => total players
     mapping(uint256 => mapping(uint256 => uint256)) public totalPlayers;
 
+    // room id => asteroid id => true value if reward was claimed
+    mapping(uint256 => mapping(uint256 => bool)) public claimed;
+
     uint256 public totalRooms;
 
     address public treasury;
+
+    uint256 public minLifeTime;
+    uint256 public maxLifeTime;
 
     modifier onlyAdmin() {
         require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "AsteroidGame: caller is not admin");
@@ -125,6 +133,9 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
         _setupRole(OPERATOR_ROLE, msgSender);
 
         treasury = msgSender;
+
+        minLifeTime = 1800; // 30 minutes
+        maxLifeTime = 3600; // 60 minutes
     }
 
     function setTreasury(address _addr)
@@ -136,6 +147,21 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
         treasury = _addr;
 
         emit TreasuryUpdated(_addr);
+    }
+
+    function setConfig(uint256 _minLifeTime, uint256 _maxLifeTime)
+        external
+        onlyOperator
+    {
+        require(_minLifeTime > 0 && _minLifeTime < _maxLifeTime, "AsteroidGame: min or max value is invalid");
+
+        if (minLifeTime != _minLifeTime) {
+            minLifeTime = _minLifeTime;
+        }
+
+        if (maxLifeTime != _maxLifeTime) {
+            maxLifeTime = _maxLifeTime;
+        }
     }
 
     function pause()
@@ -271,12 +297,14 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
         emit RocketUpdated(_roomId, _rocketId, _delayTime, _price);
     }
 
-    function _random()
+    function _random(uint256 _min, uint256 _max)
         internal
         view
         returns(uint256)
     {
-        return uint256(keccak256(abi.encodePacked(block.difficulty, block.timestamp, block.gaslimit)));
+        uint256 rnd = uint256(keccak256(abi.encodePacked(block.difficulty, block.timestamp, block.gaslimit)));
+
+        return rnd % (_max - _min + 1) + _min;
     }
 
     function searchAsteroid(uint256 _roomId)
@@ -309,7 +337,7 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
         asteroid.reward += room.searchFee;
 
-        if (_random() % 10 != 5) {
+        if (_random(1, 100) % 9 != 0) {
             emit AsteroidNotFound(_roomId, asteroidId, msgSender, room.searchFee);
 
         } else {
@@ -317,7 +345,7 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
             asteroid.totalPrizes = room.totalPrizes;
             asteroid.winnerRewardPercent = room.winnerRewardPercent;
             asteroid.ownerRewardPercent = room.ownerRewardPercent;
-            asteroid.collisionAt = block.timestamp + 600;
+            asteroid.collisionAt = block.timestamp + _random(minLifeTime, maxLifeTime);
             asteroid.status = ASTEROID_MOVING;
 
             emit AsteroidFound(_roomId, asteroidId, msgSender, room.searchFee);
@@ -378,7 +406,7 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
         emit Shoot(_roomId, asteroidId, _rocketId, msgSender, rocket.price, rocket.delayTime);
 
-        if (_random() % 10 != 5) {
+        if (_random(1, 100) % 9 != 0) {
             asteroid.collisionAt += rocket.delayTime;
 
         } else {
@@ -393,10 +421,11 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
             isPlayer[_roomId][asteroidId][msgSender] = true;
         }
 
-        _sortPlayerOrder(_roomId, asteroidId, msgSender);
+        _sortWinners(_roomId, asteroidId, msgSender);
     }
 
-    function _sortPlayerOrder(uint256 _roomId, uint256 _asteroidId, address _player)
+    // Because total prizes is small, so this function will not out of gas
+    function _sortWinners(uint256 _roomId, uint256 _asteroidId, address _player)
         internal
     {
         uint256 duplicated = 0;
@@ -472,7 +501,7 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
     }
 
     function getWinners(uint256 _roomId, uint256 _asteroidId)
-        external
+        public
         view
         returns(address[] memory winners, uint256 winnerReward, uint256 ownerReward, uint256 systemFee)
     {
@@ -493,32 +522,41 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
         systemFee = asteroid.reward - (winnerReward + ownerReward);
     }
 
-    // function getReward(uint256[] memory _roomIds, uint256 [] memory _asteroidIds)
-    //     external
-    //     view
-    //     returns(uint256)
-    // {
-        // Asteroid memory asteroid = asteroids[_roomId][_asteroidId];
+    function payReward(uint256 _roomId, uint256 _asteroidId)
+        external
+        nonReentrant
+        whenNotPaused
+        roomActive(_roomId)
+    {
+        require(!claimed[_roomId][_asteroidId], "AsteroidGame: already claimed");
 
-        // if (asteroid.status == 0 || asteroid.status == ASTEROID_MOVING && asteroid.collisionAt > block.timestamp) {
-        //     return (winners, winnerReward, ownerReward, systemFee);
-        // }
+        Room memory room = rooms[_roomId];
 
-        // winners = _winners[_roomId][_asteroidId];
+        Asteroid memory asteroid = asteroids[_roomId][_asteroidId];
 
-        // if (winners.length > 0) {
-        //     winnerReward = asteroid.reward * asteroid.winnerRewardPercent / HUNDRED_PERCENT / winners.length;
-        // }
+        if (asteroid.status == 0 || asteroid.status == ASTEROID_MOVING && asteroid.collisionAt > block.timestamp) {
+            revert("AsteroidGame: asteroid is moving or not existed");
+        }
 
-        // ownerReward = asteroid.reward * asteroid.ownerRewardPercent / HUNDRED_PERCENT;
+        (address[] memory winners, uint256 winnerReward, uint256 ownerReward, uint256 systemFee) = getWinners(_roomId, _asteroidId);
 
-        // systemFee = asteroid.reward - (winnerReward + ownerReward);
-    // }
+        if (winnerReward > 0) {
+            uint256 numWinners = winners.length;
 
-    // function claimReward(uint256[] memory _roomIds, uint256 [] memory _asteroidIds)
-    //     external
-    // {
-        
-    // }
+            for (uint256 i = 0; i < numWinners; i++) {
+                room.token.safeTransfer(winners[i], winnerReward);
+            }
+        }
+
+        if (ownerReward > 0) {
+            room.token.safeTransfer(asteroid.owner, ownerReward);
+        }
+
+        if (systemFee > 0) {
+            room.token.safeTransfer(treasury, systemFee);
+        }
+
+        emit Payment(_roomId, _asteroidId, winnerReward, ownerReward, systemFee);
+    }
 
 }
