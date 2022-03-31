@@ -30,11 +30,12 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
     event AsteroidNotFound(uint256 roomId, uint256 asteroidId, address user, uint256 searchFee);
     event AsteroidFound(uint256 roomId, uint256 asteroidId, address user, uint256 searchFee);
+    event AsteroidCreated(uint256 roomId, uint256 asteroidId, address user, uint256 reward);
     event AsteroidExploded(uint256 roomId, uint256 asteroidId);
 
     event Shoot(uint256 roomId, uint256 asteroidId, uint256 rocketId, address user, uint256 rocketPrice, uint256 delayTime);
 
-    event Payment(uint256 roomId, uint256 asteroidId, uint256 winnerReward, uint256 ownerReward, uint256 systemFee);
+    event RewardClaimed(uint256 roomId, uint256 asteroidId, address user, uint256 amount);
 
     struct Room {
         IERC20 token;
@@ -91,8 +92,8 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
     // room id => asteroid id => total players
     mapping(uint256 => mapping(uint256 => uint256)) public totalPlayers;
 
-    // room id => asteroid id => true value if reward was claimed
-    mapping(uint256 => mapping(uint256 => bool)) public claimed;
+    // room id => asteroid id => user address => true value if reward was claimed
+    mapping(uint256 => mapping(uint256 => mapping(address => bool))) public isClaimed;
 
     uint256 public totalRooms;
 
@@ -100,8 +101,6 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
     uint256 public minLifeTime;
     uint256 public maxLifeTime;
-    uint256 public minWeight;
-    uint256 public maxWeight;
 
     modifier onlyAdmin() {
         require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "AsteroidGame: caller is not admin");
@@ -140,9 +139,6 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
         minLifeTime = 1800; // 30 minutes
         maxLifeTime = 3600; // 60 minutes
-
-        minWeight = 1000; // 10.00
-        maxWeight = 3000; // 30.00
     }
 
     function setTreasury(address _addr)
@@ -156,13 +152,11 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
         emit TreasuryUpdated(_addr);
     }
 
-    function setConfig(uint256 _minLifeTime, uint256 _maxLifeTime, uint256 _minWeight, uint256 _maxWeight)
+    function setConfig(uint256 _minLifeTime, uint256 _maxLifeTime)
         external
         onlyOperator
     {
-        require(_minLifeTime > 0 && _minLifeTime < _maxLifeTime, "AsteroidGame: min or max time is invalid");
-
-        require(_minWeight < _maxWeight && _maxWeight <= HUNDRED_PERCENT, "AsteroidGame: min or max weight is invalid");
+        require(_minLifeTime > 0 && _minLifeTime < _maxLifeTime, "AsteroidGame: minimum or maximum time is invalid");
 
         if (minLifeTime != _minLifeTime) {
             minLifeTime = _minLifeTime;
@@ -170,14 +164,6 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
         if (maxLifeTime != _maxLifeTime) {
             maxLifeTime = _maxLifeTime;
-        }
-
-        if (minWeight != _minWeight) {
-            minWeight = _minWeight;
-        }
-
-        if (maxWeight != _maxWeight) {
-            maxWeight = _maxWeight;
         }
     }
 
@@ -324,27 +310,69 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
         return rnd % (_max - _min + 1) + _min;
     }
 
-    function searchAsteroid(uint256 _roomId)
-        external
-        nonReentrant
-        whenNotPaused
-        roomActive(_roomId)
+    function _updateAsteroidStatus(uint256 _roomId)
+        internal
     {
-        Room memory room = rooms[_roomId];
+        Room storage room = rooms[_roomId];
 
-        uint256 asteroidId = room.currentAsteroid;
-
-        Asteroid storage asteroid = asteroids[_roomId][asteroidId];
+        Asteroid storage asteroid = asteroids[_roomId][room.currentAsteroid];
 
         if (asteroid.status == ASTEROID_MOVING && asteroid.collisionAt <= block.timestamp) {
             asteroid.status = ASTEROID_COLLIDED;
         }
 
         if (asteroid.status == ASTEROID_COLLIDED || asteroid.status == ASTEROID_EXPLODED) {
-            asteroidId = ++room.currentAsteroid;
-
-            asteroid = asteroids[_roomId][asteroidId];
+            room.currentAsteroid++;
         }
+    }
+
+    function createAsteroid(uint256 _roomId, uint256 _reward)
+        external
+        onlyOperator
+        nonReentrant
+        whenNotPaused
+        roomActive(_roomId)
+    {
+        require(_reward > 0, "AsteroidGame: reward is invalid");
+
+        _updateAsteroidStatus(_roomId);
+
+        Room memory room = rooms[_roomId];
+
+        uint256 asteroidId = room.currentAsteroid;
+
+        Asteroid storage asteroid = asteroids[_roomId][asteroidId];
+
+        require(asteroid.status == 0, "AsteroidGame: asteroid has found");
+
+        address msgSender = _msgSender();
+
+        room.token.safeTransferFrom(msgSender, address(this), _reward);
+
+        asteroid.reward += _reward;
+        asteroid.owner = msgSender;
+        asteroid.totalPrizes = room.totalPrizes;
+        asteroid.winnerRewardPercent = room.winnerRewardPercent;
+        asteroid.ownerRewardPercent = room.ownerRewardPercent;
+        asteroid.collisionAt = block.timestamp + _random(minLifeTime, maxLifeTime);
+        asteroid.status = ASTEROID_MOVING;
+
+        emit AsteroidCreated(_roomId, asteroidId, msgSender, _reward);
+    }
+
+    function searchAsteroid(uint256 _roomId)
+        external
+        nonReentrant
+        whenNotPaused
+        roomActive(_roomId)
+    {
+        _updateAsteroidStatus(_roomId);
+
+        Room memory room = rooms[_roomId];
+
+        uint256 asteroidId = room.currentAsteroid;
+
+        Asteroid storage asteroid = asteroids[_roomId][asteroidId];
 
         require(asteroid.status == 0, "AsteroidGame: asteroid has found");
 
@@ -354,12 +382,12 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
         asteroid.reward += room.searchFee;
 
-        uint256 weight = asteroid.searchingWeight + minWeight;
+        uint256 weight = 2000 + asteroid.searchingWeight;
 
         // Generates number in range 1.00 to 100.00
         if (_random(100, 10000) > weight) {
-            if (weight + 1 < maxWeight) {
-                asteroid.searchingWeight += 1; // 0.01
+            if (weight + 1 <= 4000) {
+                asteroid.searchingWeight += 1;
             }
 
             emit AsteroidNotFound(_roomId, asteroidId, msgSender, room.searchFee);
@@ -430,12 +458,12 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
         emit Shoot(_roomId, asteroidId, _rocketId, msgSender, rocket.price, rocket.delayTime);
 
-        uint256 weight = asteroid.shootingWeight + minWeight;
+        uint256 weight = 2000 + asteroid.shootingWeight;
 
         // Generates number in range 1.00 to 100.00
         if (_random(100, 10000) > weight) {
-            if (weight + 1 < maxWeight) {
-                asteroid.shootingWeight += 1; // 0.01
+            if (weight + 1 <= 4000) {
+                asteroid.shootingWeight += 1;
             }
 
             asteroid.collisionAt += rocket.delayTime;
@@ -544,52 +572,71 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
         winners = _winners[_roomId][_asteroidId];
 
-        if (winners.length > 0 && asteroid.winnerRewardPercent > asteroid.shootingWeight) {
-            winnerReward = asteroid.reward * (asteroid.winnerRewardPercent - asteroid.shootingWeight) / HUNDRED_PERCENT / winners.length;
+        uint256 numWinners = winners.length;
+
+        if (numWinners > 0) {
+            winnerReward = asteroid.reward * asteroid.winnerRewardPercent / HUNDRED_PERCENT;
+            winnerReward = winnerReward - (winnerReward * asteroid.shootingWeight / HUNDRED_PERCENT);
         }
 
-        if (asteroid.ownerRewardPercent > asteroid.searchingWeight) {
-            ownerReward = asteroid.reward * (asteroid.ownerRewardPercent - asteroid.searchingWeight) / HUNDRED_PERCENT;
-        }
+        ownerReward = asteroid.reward * asteroid.ownerRewardPercent / HUNDRED_PERCENT;
+        ownerReward = ownerReward - (ownerReward * asteroid.searchingWeight / HUNDRED_PERCENT);
 
         systemFee = asteroid.reward - (winnerReward + ownerReward);
+
+        if (numWinners > 0) {
+            winnerReward = winnerReward / numWinners;
+        }
     }
 
-    function payReward(uint256 _roomId, uint256 _asteroidId)
+    function getBalance(uint256 _roomId, uint256 _asteroidId, address _account)
+        public
+        view
+        returns(uint256 reward, uint256 systemFee)
+    {
+        if (isClaimed[_roomId][_asteroidId][_account]) {
+            return (reward, systemFee);
+        }
+
+        (address[] memory winners, uint256 winnerReward, uint256 ownerReward, uint256 fee) = getWinners(_roomId, _asteroidId);
+
+        for (uint256 i = 0; i < winners.length; i++) {
+            if (winners[i] == _account) {
+                reward += winnerReward;
+                break;
+            }
+        }
+
+        if (asteroids[_roomId][_asteroidId].owner == _account) {
+            reward += ownerReward;
+        }
+
+        systemFee = fee;
+    }
+
+    function claimReward(uint256 _roomId, uint256 _asteroidId)
         external
         nonReentrant
         whenNotPaused
         roomActive(_roomId)
     {
-        require(!claimed[_roomId][_asteroidId], "AsteroidGame: already claimed");
+        address msgSender = _msgSender();
+
+        (uint256 amount, uint256 systemFee) = getBalance(_roomId, _asteroidId, msgSender);
+
+        require(amount > 0, "AsteroidGame: amount is invalid");
+
+        isClaimed[_roomId][_asteroidId][msgSender] = true;
 
         Room memory room = rooms[_roomId];
 
-        Asteroid memory asteroid = asteroids[_roomId][_asteroidId];
+        room.token.safeTransfer(msgSender, amount);
 
-        if (asteroid.status == 0 || asteroid.status == ASTEROID_MOVING && asteroid.collisionAt > block.timestamp) {
-            revert("AsteroidGame: asteroid is moving or not existed");
-        }
-
-        (address[] memory winners, uint256 winnerReward, uint256 ownerReward, uint256 systemFee) = getWinners(_roomId, _asteroidId);
-
-        if (winnerReward > 0) {
-            uint256 numWinners = winners.length;
-
-            for (uint256 i = 0; i < numWinners; i++) {
-                room.token.safeTransfer(winners[i], winnerReward);
-            }
-        }
-
-        if (ownerReward > 0) {
-            room.token.safeTransfer(asteroid.owner, ownerReward);
-        }
-
-        if (systemFee > 0) {
+        if (asteroids[_roomId][_asteroidId].owner == msgSender) {
             room.token.safeTransfer(treasury, systemFee);
         }
 
-        emit Payment(_roomId, _asteroidId, winnerReward, ownerReward, systemFee);
+        emit RewardClaimed(_roomId, _asteroidId, msgSender, amount);
     }
 
 }
