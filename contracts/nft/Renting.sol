@@ -104,8 +104,18 @@ contract Renting is
         );
 
         require(
+            percentOwner >= 0,
+            "Renting: can not rent if owner percent is negative"
+        );
+
+        require(
             percentOwner <= ONE_HUNDRED_PERCENT,
             "Renting: can not rent if owner percent over 100%"
+        );
+
+        require(
+            percentRenter >= 0,
+            "Renting: can not rent if renter percent is negative"
         );
 
         require(
