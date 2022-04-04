@@ -8,17 +8,12 @@ import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.
 import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "../libs/Signature.sol";
 
 interface ITGlod {
     function mint(address to, uint256 amount) external;
-
-    function transferFrom(
-        address sender,
-        address recipient,
-        uint256 amount
-    ) external returns (bool);
 }
 
 contract RewardManagement is
@@ -29,10 +24,17 @@ contract RewardManagement is
     using SafeMath for uint256;
     using SafeMath for uint32;
     using Signature for bytes32;
+    using SafeERC20 for IERC20;
 
     event ClaimReward(address user, uint256 amount, string claimId);
 
-    event FixTank(address user, uint256 tankId, uint256 price);
+    event FixTank(
+        address user,
+        uint256 tankId,
+        address erc20,
+        uint256 price,
+        string claimId
+    );
 
     uint256 public constant SECONDS_PER_DATE = 86400;
     bytes32 public constant SIGNER_ROLE = keccak256("SIGNER_ROLE");
@@ -48,7 +50,7 @@ contract RewardManagement is
     uint256 public quotaMintPerDate;
     uint256 public quotaUserMintPerDate;
     uint256 public quotaClaim;
-    uint256 public priceFixTank;
+    mapping(address => uint256) public priceFixTank;
     bool public verifyQuota;
 
     modifier onlyOperator() {
@@ -69,6 +71,14 @@ contract RewardManagement is
 
     modifier notNull(address _address) {
         require(_address != address(0), "RewardManagement: Address invalid");
+        _;
+    }
+
+    modifier erc20Whitelist(address _erc20) {
+        require(
+            priceFixTank[_erc20] > 0,
+            "RewardManagement: Erc20 must be in whitelist"
+        );
         _;
     }
 
@@ -118,9 +128,17 @@ contract RewardManagement is
         uint256 _quotaUserMintPerDate,
         uint256 _quotaClaim
     ) external onlyOperator {
-        quotaMintPerDate = _quotaMintPerDate;
-        quotaUserMintPerDate = _quotaUserMintPerDate;
-        quotaClaim = _quotaClaim;
+        if (quotaMintPerDate != _quotaMintPerDate) {
+            quotaMintPerDate = _quotaMintPerDate;
+        }
+
+        if (quotaUserMintPerDate != _quotaUserMintPerDate) {
+            quotaUserMintPerDate = _quotaUserMintPerDate;
+        }
+
+        if (quotaClaim != _quotaClaim) {
+            quotaClaim = _quotaClaim;
+        }
     }
 
     function setExpiredTime(uint256 expiredTime) external onlyOperator {
@@ -136,8 +154,11 @@ contract RewardManagement is
         tank = _tank;
     }
 
-    function setPriceFixTank(uint256 _price) external onlyOperator {
-        priceFixTank = _price;
+    function setPriceFixTank(address _erc20, uint256 _price)
+        external
+        onlyOperator
+    {
+        priceFixTank[_erc20] = _price;
     }
 
     function claim(
@@ -185,18 +206,23 @@ contract RewardManagement is
         emit ClaimReward(_msgSender(), amount, claimId);
     }
 
-    function fixTank(uint256 tankId) external {
-        require(
-            priceFixTank > 0,
-            "RewardManagement: Must be set fix tank price"
-        );
-        require(
-            tank.ownerOf(tankId) == _msgSender(),
-            "RewardManagement: must be owner token"
-        );
+    function fixTank(
+        address _erc20,
+        uint256 tankId,
+        string calldata fixId
+    ) external nonReentrant whenNotPaused erc20Whitelist(_erc20) {
+        address sender = _msgSender();
+        // require(
+        //     tank.ownerOf(tankId) == sender,
+        //     "RewardManagement: must be owner token"
+        // );
 
-        tglod.transferFrom(_msgSender(), adminWallet, priceFixTank);
-        emit FixTank(_msgSender(), tankId, priceFixTank);
+        IERC20(_erc20).safeTransferFrom(
+            sender,
+            adminWallet,
+            priceFixTank[_erc20]
+        );
+        emit FixTank(sender, tankId, _erc20, priceFixTank[_erc20], fixId);
     }
 
     function getRemainQuota() external view returns (uint256) {
