@@ -35,6 +35,7 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
     event Shoot(uint256 roomId, uint256 asteroidId, uint256 rocketId, address user, uint256 rocketPrice, uint256 delayTime);
 
+    event RewardAdded(uint256 roomId, uint256 asteroidId, address user, uint256 amount);
     event RewardClaimed(uint256 roomId, uint256 asteroidId, address user, uint256 amount);
 
     struct Room {
@@ -101,6 +102,12 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
     uint256 public minLifeTime;
     uint256 public maxLifeTime;
+    uint256 public minSearchingWeight;
+    uint256 public maxSearchingWeight;
+    uint256 public searchingRatio;
+    uint256 public minShootingWeight;
+    uint256 public maxShootingWeight;
+    uint256 public shootingRatio;
 
     modifier onlyAdmin() {
         require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "AsteroidGame: caller is not admin");
@@ -139,6 +146,14 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
         minLifeTime = 1800; // 30 minutes
         maxLifeTime = 3600; // 60 minutes
+
+        minSearchingWeight = 2000;
+        maxSearchingWeight = 4000;
+        searchingRatio = 1;
+
+        minShootingWeight = 2000;
+        maxShootingWeight = 4000;
+        shootingRatio = 1;
     }
 
     function setTreasury(address _addr)
@@ -152,11 +167,24 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
         emit TreasuryUpdated(_addr);
     }
 
-    function setConfig(uint256 _minLifeTime, uint256 _maxLifeTime)
+    function setConfig(
+        uint256 _minLifeTime,
+        uint256 _maxLifeTime,
+        uint256 _minSearchingWeight,
+        uint256 _maxSearchingWeight,
+        uint256 _searchingRatio,
+        uint256 _minShootingWeight,
+        uint256 _maxShootingWeight,
+        uint256 _shootingRatio
+    )
         external
         onlyOperator
     {
-        require(_minLifeTime > 0 && _minLifeTime < _maxLifeTime, "AsteroidGame: minimum or maximum time is invalid");
+        require(_minLifeTime > 0 && _minLifeTime < _maxLifeTime, "AsteroidGame: time is invalid");
+
+        require(_minSearchingWeight < _maxSearchingWeight && _maxSearchingWeight <= HUNDRED_PERCENT, "AsteroidGame: searching weight is invalid");
+
+        require(_minShootingWeight < _maxShootingWeight && _maxShootingWeight <= HUNDRED_PERCENT, "AsteroidGame: shooting weight is invalid");
 
         if (minLifeTime != _minLifeTime) {
             minLifeTime = _minLifeTime;
@@ -164,6 +192,30 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
         if (maxLifeTime != _maxLifeTime) {
             maxLifeTime = _maxLifeTime;
+        }
+
+        if (minSearchingWeight != _minSearchingWeight) {
+            minSearchingWeight = _minSearchingWeight;
+        }
+
+        if (maxSearchingWeight != _maxSearchingWeight) {
+            maxSearchingWeight = _maxSearchingWeight;
+        }
+
+        if (searchingRatio != _searchingRatio) {
+            searchingRatio = _searchingRatio;
+        }
+
+        if (minShootingWeight != _minShootingWeight) {
+            minShootingWeight = _minShootingWeight;
+        }
+
+        if (maxShootingWeight != _maxShootingWeight) {
+            maxShootingWeight = _maxShootingWeight;
+        }
+
+        if (shootingRatio != _shootingRatio) {
+            shootingRatio = _shootingRatio;
         }
     }
 
@@ -382,12 +434,12 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
         asteroid.reward += room.searchFee;
 
-        uint256 weight = 2000 + asteroid.searchingWeight;
+        uint256 weight = minSearchingWeight + asteroid.searchingWeight;
 
         // Generates number in range 1.00 to 100.00
         if (_random(100, 10000) > weight) {
-            if (weight + 1 <= 4000) {
-                asteroid.searchingWeight += 1;
+            if (weight + searchingRatio <= maxSearchingWeight) {
+                asteroid.searchingWeight += searchingRatio;
             }
 
             emit AsteroidNotFound(_roomId, asteroidId, msgSender, room.searchFee);
@@ -430,6 +482,31 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
         return data;
     }
 
+    function addReward(uint256 _roomId, uint256 _reward)
+        external
+        nonReentrant
+        whenNotPaused
+        roomActive(_roomId)
+    {
+        require(_reward > 0, "AsteroidGame: reward is invalid");
+
+        Room memory room = rooms[_roomId];
+
+        uint256 asteroidId = room.currentAsteroid;
+
+        Asteroid storage asteroid = asteroids[_roomId][asteroidId];
+
+        require(asteroid.status == ASTEROID_MOVING && asteroid.collisionAt > block.timestamp, "AsteroidGame: asteroid has collided, exploded or not existed");
+    
+        address msgSender = _msgSender();
+
+        room.token.safeTransferFrom(msgSender, address(this), _reward);
+
+        asteroid.reward += _reward;
+
+        emit RewardAdded(_roomId, asteroidId, msgSender, _reward);
+    }
+
     function shootAsteroid(uint256 _roomId, uint256 _rocketId)
         external
         nonReentrant
@@ -458,12 +535,12 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
         emit Shoot(_roomId, asteroidId, _rocketId, msgSender, rocket.price, rocket.delayTime);
 
-        uint256 weight = 2000 + asteroid.shootingWeight;
+        uint256 weight = minShootingWeight + asteroid.shootingWeight;
 
         // Generates number in range 1.00 to 100.00
         if (_random(100, 10000) > weight) {
-            if (weight + 1 <= 4000) {
-                asteroid.shootingWeight += 1;
+            if (weight + shootingRatio <= maxShootingWeight) {
+                asteroid.shootingWeight += shootingRatio;
             }
 
             asteroid.collisionAt += rocket.delayTime;
