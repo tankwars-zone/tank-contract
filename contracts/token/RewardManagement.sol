@@ -2,7 +2,6 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol";
@@ -43,7 +42,7 @@ contract RewardManagement is
     ITGlod public tglod;
     IERC721 public tank;
     address public adminWallet;
-    uint256 private _expiredTime = 300;
+    uint256 public expiredTime;
     mapping(address => mapping(uint32 => uint256)) private _userQuota;
     mapping(uint32 => uint256) private _dateQuota;
     mapping(string => bool) private _claimId;
@@ -97,6 +96,7 @@ contract RewardManagement is
         tank = _tank;
         verifyQuota = true;
         adminWallet = _adminWallet;
+        expiredTime = 300;
     }
 
     function setTgold(ITGlod _tglod)
@@ -141,9 +141,9 @@ contract RewardManagement is
         }
     }
 
-    function setExpiredTime(uint256 expiredTime) external onlyOperator {
-        require(expiredTime > 0, "RewardManagement: ExpiredTime Invalid");
-        _expiredTime = expiredTime;
+    function setExpiredTime(uint256 _expiredTime) external onlyOperator {
+        require(_expiredTime > 0, "RewardManagement: ExpiredTime Invalid");
+        expiredTime = _expiredTime;
     }
 
     function setVerifyQuota(bool status) external onlyOperator {
@@ -168,7 +168,7 @@ contract RewardManagement is
         bytes calldata signature
     ) external nonReentrant whenNotPaused {
         require(
-            (block.timestamp - timestamp) <= _expiredTime,
+            (block.timestamp - timestamp) <= expiredTime,
             "RewardManagement: Transaction Expired"
         );
 
@@ -200,7 +200,9 @@ contract RewardManagement is
         }
 
         _dateQuota[date] = _dateQuota[date].add(amount);
-        _userQuota[_msgSender()][date] = _dateQuota[date].add(amount);
+        _userQuota[_msgSender()][date] = _userQuota[_msgSender()][date].add(
+            amount
+        );
         _claimId[claimId] = true;
         tglod.mint(_msgSender(), amount);
         emit ClaimReward(_msgSender(), amount, claimId);
