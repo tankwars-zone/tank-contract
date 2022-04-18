@@ -2,11 +2,10 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
-
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 
-contract MysteryBox is
+contract TankBox is
     AccessControlEnumerable,
     ERC721Enumerable,
     ERC721Burnable
@@ -34,10 +33,10 @@ contract MysteryBox is
     function setBaseURI(string memory uri) public virtual {
         require(
             hasRole(DEFAULT_ADMIN_ROLE, _msgSender()),
-            "MysteryBox: must have admin role to set"
+            "TankBox: must have admin role to set"
         );
 
-        require(bytes(uri).length > 0, "MysteryBox: uri is invalid");
+        require(bytes(uri).length > 0, "TankBox: uri is invalid");
 
         _uri = uri;
 
@@ -47,7 +46,7 @@ contract MysteryBox is
     function mint(address to) public virtual {
         require(
             hasRole(MINTER_ROLE, _msgSender()),
-            "MysteryBox: must have minter role to mint"
+            "TankBox: must have minter role to mint"
         );
 
         _mint(to, ++currentId);
@@ -56,12 +55,12 @@ contract MysteryBox is
     function mintBatch(address[] memory accounts) public virtual {
         require(
             hasRole(MINTER_ROLE, _msgSender()),
-            "MysteryBox: must have minter role to mint"
+            "TankBox: must have minter role to mint"
         );
 
         uint256 length = accounts.length;
 
-        require(length > 0, "MysteryBox: array length is invalid");
+        require(length > 0, "TankBox: array length is invalid");
 
         uint256 id = currentId;
 

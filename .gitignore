@@ -5,3 +5,6 @@ node_modules
 contracts/artifacts
 contracts/token/artifacts
 contracts/nft/artifacts
+contracts/proxy/artifacts
+artifacts
+cache
