@@ -30,7 +30,6 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
     event AsteroidNotFound(uint256 roomId, uint256 asteroidId, address user, uint256 searchFee);
     event AsteroidFound(uint256 roomId, uint256 asteroidId, address user, uint256 searchFee);
-    event AsteroidCreated(uint256 roomId, uint256 asteroidId, address user, uint256 reward);
     event AsteroidExploded(uint256 roomId, uint256 asteroidId);
 
     event Shoot(uint256 roomId, uint256 asteroidId, uint256 rocketId, address user, uint256 rocketPrice, uint256 delayTime);
@@ -100,14 +99,14 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
     address public treasury;
 
-    uint256 public minLifeTime;
-    uint256 public maxLifeTime;
-    uint256 public minSearchingWeight;
-    uint256 public maxSearchingWeight;
-    uint256 public searchingRatio;
-    uint256 public minShootingWeight;
-    uint256 public maxShootingWeight;
-    uint256 public shootingRatio;
+    uint256 private minLifeTime;
+    uint256 private maxLifeTime;
+    uint256 private minSearchingWeight;
+    uint256 private maxSearchingWeight;
+    uint256 private searchingRatio;
+    uint256 private minShootingWeight;
+    uint256 private maxShootingWeight;
+    uint256 private shootingRatio;
 
     modifier onlyAdmin() {
         require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "AsteroidGame: caller is not admin");
@@ -217,6 +216,14 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
         if (shootingRatio != _shootingRatio) {
             shootingRatio = _shootingRatio;
         }
+    }
+
+    function getConfig()
+        public
+        view
+        returns(uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256)
+    {
+        return (minLifeTime, maxLifeTime, minSearchingWeight, maxSearchingWeight, searchingRatio, minShootingWeight, maxShootingWeight, shootingRatio);
     }
 
     function pause()
@@ -377,40 +384,6 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
         if (asteroid.status == ASTEROID_COLLIDED || asteroid.status == ASTEROID_EXPLODED) {
             room.currentAsteroid++;
         }
-    }
-
-    function createAsteroid(uint256 _roomId, uint256 _reward)
-        external
-        onlyOperator
-        nonReentrant
-        whenNotPaused
-        roomActive(_roomId)
-    {
-        require(_reward > 0, "AsteroidGame: reward is invalid");
-
-        _updateAsteroidStatus(_roomId);
-
-        Room memory room = rooms[_roomId];
-
-        uint256 asteroidId = room.currentAsteroid;
-
-        Asteroid storage asteroid = asteroids[_roomId][asteroidId];
-
-        require(asteroid.status == 0, "AsteroidGame: asteroid has found");
-
-        address msgSender = _msgSender();
-
-        room.token.safeTransferFrom(msgSender, address(this), _reward);
-
-        asteroid.reward += _reward;
-        asteroid.owner = msgSender;
-        asteroid.totalPrizes = room.totalPrizes;
-        asteroid.winnerRewardPercent = room.winnerRewardPercent;
-        asteroid.ownerRewardPercent = room.ownerRewardPercent;
-        asteroid.collisionAt = block.timestamp + _random(minLifeTime, maxLifeTime);
-        asteroid.status = ASTEROID_MOVING;
-
-        emit AsteroidCreated(_roomId, asteroidId, msgSender, _reward);
     }
 
     function searchAsteroid(uint256 _roomId)
