@@ -233,9 +233,9 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
         _unpause();
     }
 
-    function createRoom(address _token, uint256 _searchFee, uint256 _totalPrizes, uint256 _winnerRewardPercent, uint256 _ownerRewardPercent)
-        external
-        onlyOperator
+    function _checkRoomParams(address _token, uint256 _searchFee, uint256 _totalPrizes, uint256 _winnerRewardPercent, uint256 _ownerRewardPercent)
+        internal
+        pure
     {
         require(_token != address(0), "AsteroidGame: address is invalid");
 
@@ -244,6 +244,13 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
         require(_totalPrizes > 0, "AsteroidGame: total prizes is invalid");
 
         require(_winnerRewardPercent + _ownerRewardPercent <= HUNDRED_PERCENT, "AsteroidGame: percent is invalid");
+    }
+
+    function createRoom(address _token, uint256 _searchFee, uint256 _totalPrizes, uint256 _winnerRewardPercent, uint256 _ownerRewardPercent)
+        external
+        onlyOperator
+    {
+        _checkRoomParams(_token, _searchFee, _totalPrizes, _winnerRewardPercent, _ownerRewardPercent);
 
         uint256 roomId = ++totalRooms;
 
@@ -257,13 +264,7 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
         onlyOperator
         roomExists(_roomId)
     {
-        require(_token != address(0), "AsteroidGame: address is invalid");
-
-        require(_searchFee > 0, "AsteroidGame: search fee is invalid");
-
-        require(_totalPrizes > 0, "AsteroidGame: total prizes is invalid");
-
-        require(_winnerRewardPercent + _ownerRewardPercent <= HUNDRED_PERCENT, "AsteroidGame: percent is invalid");
+        _checkRoomParams(_token, _searchFee, _totalPrizes, _winnerRewardPercent, _ownerRewardPercent);
 
         Room storage room = rooms[_roomId];
 
