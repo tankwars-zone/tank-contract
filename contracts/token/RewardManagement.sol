@@ -15,6 +15,23 @@ interface ITGlod {
     function mint(address to, uint256 amount) external;
 }
 
+interface IRenting {
+    function isRenting(address erc721, uint256 tokenId)
+        external
+        view
+        returns (bool);
+
+    function rents(address erc721, uint256 tokenId)
+        external
+        view
+        returns (
+            address owner,
+            address renter,
+            uint256 percentOwner,
+            uint256 percentRenter
+        );
+}
+
 contract RewardManagement is
     AccessControlEnumerableUpgradeable,
     ReentrancyGuardUpgradeable,
@@ -31,7 +48,8 @@ contract RewardManagement is
         address user,
         uint256 tankId,
         address erc20,
-        uint256 price,
+        uint256 ownerFee,
+        uint256 renterFee,
         string claimId
     );
 
@@ -40,17 +58,34 @@ contract RewardManagement is
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
     ITGlod public tglod;
+
     IERC721 public tank;
+
     address public adminWallet;
+
     uint256 public expiredTime;
+
     mapping(address => mapping(uint32 => uint256)) private _userQuota;
+
     mapping(uint32 => uint256) private _dateQuota;
+
     mapping(string => bool) private _claimId;
+
     uint256 public quotaMintPerDate;
+
     uint256 public quotaUserMintPerDate;
+
     uint256 public quotaClaim;
+
     mapping(address => uint256) public priceFixTank;
+
     bool public verifyQuota;
+
+    IRenting public renting;
+
+    uint256 public constant ONE_HUNDRED_PERCENT = 10000;
+
+    mapping(string => bool) private _fixTankId;
 
     modifier onlyOperator() {
         require(
@@ -121,6 +156,14 @@ contract RewardManagement is
         notNull(address(_adminWallet))
     {
         adminWallet = _adminWallet;
+    }
+
+    function setRenting(IRenting _renting)
+        external
+        onlyOperator
+        notNull(address(_renting))
+    {
+        renting = _renting;
     }
 
     function setQuota(
@@ -213,18 +256,35 @@ contract RewardManagement is
         uint256 tankId,
         string calldata fixId
     ) external nonReentrant whenNotPaused erc20Whitelist(_erc20) {
-        address sender = _msgSender();
-        // require(
-        //     tank.ownerOf(tankId) == sender,
-        //     "RewardManagement: must be owner token"
-        // );
+        require(!_fixTankId[fixId], "RewardManagement: Transaction Executed");
 
-        IERC20(_erc20).safeTransferFrom(
-            sender,
-            adminWallet,
-            priceFixTank[_erc20]
-        );
-        emit FixTank(sender, tankId, _erc20, priceFixTank[_erc20], fixId);
+        address sender = _msgSender();
+        address tokenOwner = tank.ownerOf(tankId);
+
+        if (renting.isRenting(address(tank), tankId)) {
+            _payFixTankFeeForRent(tokenOwner, tankId, _erc20, fixId);
+        } else {
+            require(
+                sender == tokenOwner,
+                "RewardManagement: Must be token owner"
+            );
+
+            IERC20(_erc20).safeTransferFrom(
+                sender,
+                adminWallet,
+                priceFixTank[_erc20]
+            );
+            emit FixTank(
+                sender,
+                tankId,
+                _erc20,
+                priceFixTank[_erc20],
+                0,
+                fixId
+            );
+        }
+
+        _fixTankId[fixId] = true;
     }
 
     function getRemainQuota() external view returns (uint256) {
@@ -242,7 +302,50 @@ contract RewardManagement is
         return quotaUserMintPerDate - _userQuota[_address][date];
     }
 
+    function _payFixTankFeeForRent(
+        address _tokenOwner,
+        uint256 _tankId,
+        address _erc20,
+        string memory _fixId
+    ) internal {
+        address sender = _msgSender();
+
+        (
+            address owner,
+            address renter,
+            uint256 percentOwner,
+            uint256 percentRenter
+        ) = renting.rents(address(tank), _tankId);
+
+        require(
+            (sender == owner || sender == renter) && _tokenOwner == owner,
+            "RewardManagement: Caller invalid"
+        );
+
+        uint256 price = priceFixTank[_erc20];
+        uint256 ownerFee = _calculateFee(price, percentOwner);
+        uint256 renterFee = _calculateFee(price, percentRenter);
+
+        if (ownerFee > 0) {
+            IERC20(_erc20).safeTransferFrom(owner, adminWallet, ownerFee);
+        }
+
+        if (renterFee > 0) {
+            IERC20(_erc20).safeTransferFrom(renter, adminWallet, renterFee);
+        }
+
+        emit FixTank(sender, _tankId, _erc20, ownerFee, renterFee, _fixId);
+    }
+
     function _getCurrentDate() internal view returns (uint32) {
         return uint32(block.timestamp / SECONDS_PER_DATE);
+    }
+
+    function _calculateFee(uint256 _price, uint256 _feePercent)
+        internal
+        pure
+        returns (uint256)
+    {
+        return (_price * _feePercent) / ONE_HUNDRED_PERCENT;
     }
 }

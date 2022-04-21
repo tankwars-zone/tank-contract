@@ -10,14 +10,6 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "../../libs/Signature.sol";
 
-interface ITankBox is IERC721 {
-    function burn(uint256 tokenId) external;
-
-    function mint(address account) external;
-
-    function currentId() external returns (uint256);
-}
-
 interface ITank is IERC721 {
     function mint(address account) external;
 
@@ -54,14 +46,6 @@ contract SuperFactory is
 
     event SpeedUp(uint256 boxId, uint256 timeToBuild);
 
-    event ClaimTank(
-        address user,
-        uint8 cloneId,
-        uint256 parentTankId,
-        uint256 tankId,
-        uint256 boxId
-    );
-
     struct ClonePrice {
         address token;
         uint256 price;
@@ -74,27 +58,25 @@ contract SuperFactory is
         uint8 speedUpNumber;
     }
 
-    ITank tank;
+    ITank public tank;
 
-    ITankBox tankBox;
+    uint8 public maximunClone;
 
-    uint8 maximunClone;
-
-    mapping(uint256 => uint8) numberCloned;
+    mapping(uint256 => uint8) public numberCloned;
 
     // cloneId ==> price
-    mapping(uint8 => ClonePrice[]) clonePrices;
+    mapping(uint8 => ClonePrice[]) public clonePrices;
 
     // boxId ==> time to build
-    mapping(uint256 => BoxTankInfo) boxTankInfo;
+    mapping(uint256 => BoxTankInfo) public boxTankInfo;
 
-    address treasuryWallet;
+    address public treasuryWallet;
 
-    IERC20 speedupToken;
+    IERC20 public speedupToken;
 
-    uint256 speedupFee;
+    uint256 public speedupFee;
 
-    uint256 speedupTime;
+    uint256 public speedupTime;
 
     modifier onlyAdmin() {
         require(
@@ -136,10 +118,6 @@ contract SuperFactory is
 
     function setTank(ITank _address) external onlyOperator {
         tank = _address;
-    }
-
-    function setTankBox(ITankBox _address) external onlyOperator {
-        tankBox = _address;
     }
 
     function setMaximunClone(uint8 _maximunClone) external onlyOperator {
@@ -211,7 +189,7 @@ contract SuperFactory is
             "Superfactory: the number of clone is exceed"
         );
 
-        bytes32 hashMessage = keccak256(abi.encodePacked(sender, _tankId));
+        bytes32 hashMessage = keccak256(abi.encodePacked(cloneId, _tankId));
         bytes32 prefixed = hashMessage.prefixed();
         address singer = prefixed.recoverSigner(_signature);
         require(
@@ -239,10 +217,10 @@ contract SuperFactory is
             }
         }
 
-        tankBox.mint(sender);
+        tank.mint(sender);
         numberCloned[_tankId]++;
 
-        uint256 boxId = tankBox.currentId();
+        uint256 boxId = tank.currentId();
         BoxTankInfo storage boxInfo = boxTankInfo[boxId];
         boxInfo.cloneId = cloneId;
         boxInfo.tankId = _tankId;
@@ -254,7 +232,7 @@ contract SuperFactory is
     function speedUp(uint256 _boxId) external whenNotPaused nonReentrant {
         address sender = _msgSender();
         require(
-            tankBox.ownerOf(_boxId) == sender,
+            tank.ownerOf(_boxId) == sender,
             "Superfactory: must be owner of box"
         );
 
@@ -270,41 +248,6 @@ contract SuperFactory is
         boxInfo.speedUpNumber += 1;
 
         emit SpeedUp(_boxId, boxInfo.timeBuildFinish);
-    }
-
-    function onERC721Received(
-        address,
-        address _user,
-        uint256 _boxId,
-        bytes calldata
-    ) public nonReentrant returns (bytes4) {
-        address sender = _msgSender();
-
-        require(
-            address(tankBox) == sender,
-            "Superfactory: caller is not tank box contract"
-        );
-
-        BoxTankInfo memory boxInfo = boxTankInfo[_boxId];
-        require(boxInfo.tankId > 0, "Superfactory: Box is not exists");
-        require(
-            boxInfo.timeBuildFinish >= block.timestamp,
-            "Superfactory: Cannot claim tank"
-        );
-
-        tankBox.burn(_boxId);
-        tank.mint(_user);
-
-        emit ClaimTank(
-            _user,
-            boxInfo.cloneId,
-            boxInfo.tankId,
-            tank.currentId(),
-            _boxId
-        );
-
-        delete boxTankInfo[_boxId];
-        return this.onERC721Received.selector;
     }
 
     function _getTimeToBuild() internal view returns (uint256) {
