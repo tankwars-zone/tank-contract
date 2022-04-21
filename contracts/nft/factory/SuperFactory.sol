@@ -46,6 +46,13 @@ contract SuperFactory is
 
     event SpeedUp(uint256 boxId, uint256 timeToBuild);
 
+    event ClaimTank(
+        address user,
+        uint8 cloneId,
+        uint256 parentTankId,
+        uint256 tankId
+    );
+
     struct ClonePrice {
         address token;
         uint256 price;
@@ -110,6 +117,14 @@ contract SuperFactory is
         TIME_TO_BUILD_TANK = 86400 * 7;
         speedupTime = 86400 * 7;
         treasuryWallet = _msgSender();
+    }
+
+    function pause() public onlyAdmin {
+        _pause();
+    }
+
+    function unpause() public onlyAdmin {
+        _unpause();
     }
 
     function setTreasuryWallet(address _address) external onlyAdmin {
@@ -244,10 +259,35 @@ contract SuperFactory is
         );
 
         speedupToken.safeTransferFrom(sender, treasuryWallet, speedupFee);
-        boxInfo.timeBuildFinish += speedupTime;
-        boxInfo.speedUpNumber += 1;
+
+        if (boxInfo.timeBuildFinish + speedupTime >= block.timestamp) {
+            emit ClaimTank(sender, boxInfo.cloneId, boxInfo.tankId, _boxId);
+            delete boxTankInfo[_boxId];
+        } else {
+            boxInfo.timeBuildFinish += speedupTime;
+            boxInfo.speedUpNumber += 1;
+        }
 
         emit SpeedUp(_boxId, boxInfo.timeBuildFinish);
+    }
+
+    function claimTank(uint256 _boxId) public whenNotPaused nonReentrant {
+        address sender = _msgSender();
+        require(
+            tank.ownerOf(_boxId) == sender,
+            "Superfactory: must be owner of box"
+        );
+
+        BoxTankInfo memory boxInfo = boxTankInfo[_boxId];
+        require(boxInfo.tankId > 0, "Superfactory: Box is not exists");
+        require(
+            boxInfo.timeBuildFinish >= block.timestamp,
+            "Superfactory: Cannot claim tank"
+        );
+
+        emit ClaimTank(sender, boxInfo.cloneId, boxInfo.tankId, _boxId);
+
+        delete boxTankInfo[_boxId];
     }
 
     function _getTimeToBuild() internal view returns (uint256) {
