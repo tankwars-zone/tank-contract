@@ -411,7 +411,7 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
         uint256 weight = minSearchingWeight + asteroid.searchingWeight;
 
         // Generates number in range 1.00 to 100.00
-        if (_random(100, 10000) > weight) {
+        if (_random(1, 10000) > weight) {
             if (weight + searchingRatio <= maxSearchingWeight) {
                 asteroid.searchingWeight += searchingRatio;
             }
@@ -512,7 +512,7 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
         uint256 weight = minShootingWeight + asteroid.shootingWeight;
 
         // Generates number in range 1.00 to 100.00
-        if (_random(100, 10000) > weight) {
+        if (_random(1, 10000) > weight) {
             if (weight + shootingRatio <= maxShootingWeight) {
                 asteroid.shootingWeight += shootingRatio;
             }
