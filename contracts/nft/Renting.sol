@@ -41,7 +41,7 @@ contract Renting is
 
     // erc721 address => status
     mapping(address => bool) public erc721Whitelist;
-    
+
     // erc721 address => token id => sell order
     mapping(address => mapping(uint256 => Rent)) public rents;
 
@@ -93,15 +93,9 @@ contract Renting is
 
         address nftOwner = IERC721(erc721).ownerOf(tokenId);
 
-        require(
-            nftOwner == msgSender,
-            "Renting: can not rent"
-        );
+        require(nftOwner == msgSender, "Renting: can not rent");
 
-        require(
-            nftOwner != renter,
-            "Renting: can not rent if renter is owner"
-        );
+        require(nftOwner != renter, "Renting: can not rent if renter is owner");
 
         require(
             percentOwner <= ONE_HUNDRED_PERCENT,
@@ -119,15 +113,27 @@ contract Renting is
         );
 
         Rent memory info = rents[erc721][tokenId];
-        
+
         require(
             info.owner == address(0),
             "Renting: can not rent if erc721 already rented"
         );
 
-        rents[erc721][tokenId] = Rent(msgSender, renter, percentOwner, percentRenter);
+        rents[erc721][tokenId] = Rent(
+            msgSender,
+            renter,
+            percentOwner,
+            percentRenter
+        );
 
-        emit RentCreated(erc721, tokenId, msgSender, renter, percentOwner, percentRenter);
+        emit RentCreated(
+            erc721,
+            tokenId,
+            msgSender,
+            renter,
+            percentOwner,
+            percentRenter
+        );
     }
 
     function cancelRent(address erc721, uint256 tokenId)
@@ -155,8 +161,9 @@ contract Renting is
     }
 
     function isRenting(address erc721, uint256 tokenId)
-        external view
-        returns(bool)
+        external
+        view
+        returns (bool)
     {
         Rent memory info = rents[erc721][tokenId];
         return info.owner != address(0);

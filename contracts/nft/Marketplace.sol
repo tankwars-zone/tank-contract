@@ -214,7 +214,6 @@ contract Marketplace is
 
         require(isRenting == false, "Marketplace: erc721 is renting");
 
-
         Ask memory info = asks[erc721][tokenId];
 
         if (info.seller == address(0)) {
@@ -478,5 +477,8 @@ contract Marketplace is
 }
 
 interface IRenting {
-    function isRenting(address erc721, uint256 tokenId) external view returns(bool);
+    function isRenting(address erc721, uint256 tokenId)
+        external
+        view
+        returns (bool);
 }
