@@ -240,7 +240,7 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
         _unpause();
     }
 
-    function _checkRoomParams(address _token, uint256 _searchFee, uint256 _totalPrizes, uint256 _winnerRewardPercent, uint256 _ownerRewardPercent)
+    function _checkRoomParams(address _token, uint256 _searchFee, uint256 _winnerRewardPercent, uint256 _ownerRewardPercent)
         internal
         pure
     {
@@ -248,30 +248,28 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
         require(_searchFee > 0, "AsteroidGame: search fee is invalid");
 
-        require(_totalPrizes > 0, "AsteroidGame: total prizes is invalid");
-
         require(_winnerRewardPercent + _ownerRewardPercent <= HUNDRED_PERCENT, "AsteroidGame: percent is invalid");
     }
 
-    function createRoom(address _token, uint256 _searchFee, uint256 _totalPrizes, uint256 _winnerRewardPercent, uint256 _ownerRewardPercent)
+    function createRoom(address _token, uint256 _searchFee, uint256 _winnerRewardPercent, uint256 _ownerRewardPercent)
         external
         onlyOperator
     {
-        _checkRoomParams(_token, _searchFee, _totalPrizes, _winnerRewardPercent, _ownerRewardPercent);
+        _checkRoomParams(_token, _searchFee, _winnerRewardPercent, _ownerRewardPercent);
 
         uint256 roomId = ++totalRooms;
 
-        rooms[roomId] = Room(IERC20(_token), 1, _searchFee, true, _totalPrizes, _winnerRewardPercent, _ownerRewardPercent);
+        rooms[roomId] = Room(IERC20(_token), 1, _searchFee, true, 0, _winnerRewardPercent, _ownerRewardPercent);
 
-        emit RoomCreated(roomId, _token, _searchFee, _totalPrizes, _winnerRewardPercent, _ownerRewardPercent);
+        emit RoomCreated(roomId, _token, _searchFee, 0, _winnerRewardPercent, _ownerRewardPercent);
     }
 
-    function updateRoom(uint256 _roomId, address _token, uint256 _searchFee, uint256 _totalPrizes, uint256 _winnerRewardPercent, uint256 _ownerRewardPercent)
+    function updateRoom(uint256 _roomId, address _token, uint256 _searchFee, uint256 _winnerRewardPercent, uint256 _ownerRewardPercent)
         external
         onlyOperator
         roomExists(_roomId)
     {
-        _checkRoomParams(_token, _searchFee, _totalPrizes, _winnerRewardPercent, _ownerRewardPercent);
+        _checkRoomParams(_token, _searchFee, _winnerRewardPercent, _ownerRewardPercent);
 
         Room storage room = rooms[_roomId];
 
@@ -287,10 +285,6 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
             room.searchFee = _searchFee;
         }
 
-        if (room.totalPrizes != _totalPrizes) {
-            room.totalPrizes = _totalPrizes;
-        }
-
         if (room.winnerRewardPercent != _winnerRewardPercent) {
             room.winnerRewardPercent = _winnerRewardPercent;
         }
@@ -299,7 +293,7 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
             room.ownerRewardPercent = _ownerRewardPercent;
         }
 
-        emit RoomUpdated(_roomId, _token, _searchFee, _totalPrizes, _winnerRewardPercent, _ownerRewardPercent);
+        emit RoomUpdated(_roomId, _token, _searchFee, 0, _winnerRewardPercent, _ownerRewardPercent);
     }
 
     function updateRoomStatus(uint256 _roomId, bool _status)
@@ -420,7 +414,6 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
         } else {
             asteroid.owner = msgSender;
-            asteroid.totalPrizes = room.totalPrizes;
             asteroid.winnerRewardPercent = room.winnerRewardPercent;
             asteroid.ownerRewardPercent = room.ownerRewardPercent;
             asteroid.collisionAt = block.timestamp + _random(minLifeTime, maxLifeTime);
@@ -555,7 +548,7 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
         }
 
         if (duplicated == 0) {
-            if (asteroids[_roomId][_asteroidId].totalPrizes == size) {
+            if (size == 3) { // 3 is total prizes
                 duplicated = 1;
 
             } else {
@@ -613,31 +606,40 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
     function getWinners(uint256 _roomId, uint256 _asteroidId)
         public
         view
-        returns(address[] memory winners, uint256 winnerReward, uint256 ownerReward, uint256 systemFee)
+        returns(address[] memory winners, uint256[3] memory winnerRewards, uint256 ownerReward, uint256 systemFee)
     {
         Asteroid memory asteroid = asteroids[_roomId][_asteroidId];
 
         if (asteroid.status == 0 || asteroid.status == ASTEROID_MOVING && asteroid.collisionAt > block.timestamp) {
-            return (winners, winnerReward, ownerReward, systemFee);
+            return (winners, winnerRewards, ownerReward, systemFee);
         }
 
         winners = _winners[_roomId][_asteroidId];
 
         uint256 numWinners = winners.length;
 
+        uint256 winnerReward;
+
         if (numWinners > 0) {
             winnerReward = asteroid.reward * asteroid.winnerRewardPercent / HUNDRED_PERCENT;
             winnerReward = winnerReward - (winnerReward * asteroid.shootingWeight / HUNDRED_PERCENT);
+
+            if (asteroid.totalPrizes > 0) {
+                winnerRewards[0] = winnerReward / 3; // 3 is total prizes
+                winnerRewards[1] = winnerRewards[0];
+
+            } else {
+                winnerRewards[0] = winnerReward * 1500 / HUNDRED_PERCENT; // 15%
+                winnerRewards[1] = winnerReward * 2000 / HUNDRED_PERCENT; // 20%
+            }
+
+            winnerRewards[2] = winnerReward - (winnerRewards[0] + winnerRewards[1]);
         }
 
         ownerReward = asteroid.reward * asteroid.ownerRewardPercent / HUNDRED_PERCENT;
         ownerReward = ownerReward - (ownerReward * asteroid.searchingWeight / HUNDRED_PERCENT);
 
         systemFee = asteroid.reward - (winnerReward + ownerReward);
-
-        if (numWinners > 0) {
-            winnerReward = winnerReward / numWinners;
-        }
     }
 
     function getBalance(uint256 _roomId, uint256 _asteroidId, address _account)
@@ -649,11 +651,11 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
             return (reward, systemFee);
         }
 
-        (address[] memory winners, uint256 winnerReward, uint256 ownerReward, uint256 fee) = getWinners(_roomId, _asteroidId);
+        (address[] memory winners, uint256[3] memory winnerRewards, uint256 ownerReward, uint256 fee) = getWinners(_roomId, _asteroidId);
 
         for (uint256 i = 0; i < winners.length; i++) {
             if (winners[i] == _account) {
-                reward += winnerReward;
+                reward += winnerRewards[i];
                 break;
             }
         }
