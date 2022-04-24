@@ -419,6 +419,10 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
             asteroid.collisionAt = block.timestamp + _random(minLifeTime, maxLifeTime);
             asteroid.status = ASTEROID_MOVING;
 
+            for (uint256 i = 0; i < 3; i++) {
+                _winners[_roomId][asteroidId].push(msgSender);
+            }
+
             emit AsteroidFound(_roomId, asteroidId, msgSender, room.searchFee);
         }
     }
@@ -543,29 +547,18 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
             players[i] = winners[i];
 
             if (players[i] == _player) {
-                duplicated = i + 1;
+                duplicated = i;
             }
         }
 
-        if (duplicated == 0) {
-            if (size == 3) { // 3 is total prizes
-                duplicated = 1;
+        size--;
 
-            } else {
-                winners.push(_player);
-            }
+        for (uint256 i = duplicated; i < size; i++) {
+            winners[i] = players[i + 1];
         }
 
-        if (duplicated != 0) {
-            size--;
-
-            for (uint256 i = duplicated - 1; i < size; i++) {
-                winners[i] = players[i + 1];
-            }
-
-            if (winners[size] != _player) {
-                winners[size] = _player;
-            }
+        if (winners[size] != _player) {
+            winners[size] = _player;
         }
     }
 
@@ -616,11 +609,9 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
         winners = _winners[_roomId][_asteroidId];
 
-        uint256 numWinners = winners.length;
-
         uint256 winnerReward;
 
-        if (numWinners > 0) {
+        if (winners.length > 0) {
             winnerReward = asteroid.reward * asteroid.winnerRewardPercent / HUNDRED_PERCENT;
             winnerReward = winnerReward - (winnerReward * asteroid.shootingWeight / HUNDRED_PERCENT);
 
