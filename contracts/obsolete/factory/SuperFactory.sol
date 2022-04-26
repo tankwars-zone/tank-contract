@@ -28,27 +28,27 @@ contract SuperFactory is
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
     uint256 public TIME_TO_BUILD_TANK;
 
-    event SetPrice(uint8 cloneId, address[] erc20s, uint256[] prices);
+    event SetPrice(uint256 cloneId, address[] erc20s, uint256[] prices);
 
     event CloneTank(
         address user,
-        uint8 cloneId,
+        uint256 cloneId,
+        uint256 parentTankId,
         uint256 tankId,
-        uint256 boxId,
         uint256 timeToBuild
     );
 
-    event SetSpeedUpFee(
+    event SetSpeedUpFeeCloneTank(
         address speedupToken,
         uint256 speedupFee,
         uint256 speedupTime
     );
 
-    event SpeedUp(uint256 boxId, uint256 timeToBuild);
+    event SpeedUpCloneTank(uint256 tankId, uint256 timeToBuild);
 
     event ClaimTank(
         address user,
-        uint8 cloneId,
+        uint256 cloneId,
         uint256 parentTankId,
         uint256 tankId
     );
@@ -60,19 +60,20 @@ contract SuperFactory is
 
     struct BoxTankInfo {
         uint256 tankId;
-        uint8 cloneId;
+        uint256 cloneId;
         uint256 timeBuildFinish;
-        uint8 speedUpNumber;
+        uint256 speedUpNumber;
+        bool claimed;
     }
 
     ITank public tank;
 
-    uint8 public maximunClone;
+    uint256 public maximunClone;
 
-    mapping(uint256 => uint8) public numberCloned;
+    mapping(uint256 => uint256) public numberCloned;
 
     // cloneId ==> price
-    mapping(uint8 => ClonePrice[]) public clonePrices;
+    mapping(uint256 => ClonePrice[]) public clonePrices;
 
     // boxId ==> time to build
     mapping(uint256 => BoxTankInfo) public boxTankInfo;
@@ -135,7 +136,7 @@ contract SuperFactory is
         tank = _address;
     }
 
-    function setMaximunClone(uint8 _maximunClone) external onlyOperator {
+    function setMaximunClone(uint256 _maximunClone) external onlyOperator {
         maximunClone = _maximunClone;
     }
 
@@ -158,11 +159,15 @@ contract SuperFactory is
             speedupTime = _speedupTime;
         }
 
-        emit SetSpeedUpFee(address(speedupToken), speedupFee, speedupTime);
+        emit SetSpeedUpFeeCloneTank(
+            address(speedupToken),
+            speedupFee,
+            speedupTime
+        );
     }
 
     function setClonePrice(
-        uint8 _cloneId,
+        uint256 _cloneId,
         address[] calldata _erc20s,
         uint256[] calldata _prices
     ) external onlyOperator {
@@ -192,7 +197,7 @@ contract SuperFactory is
         nonReentrant
     {
         address sender = _msgSender();
-        uint8 cloneId = numberCloned[_tankId] + 1;
+        uint256 cloneId = numberCloned[_tankId] + 1;
         uint256 timeToBuild = _getTimeToBuild();
         require(
             tank.ownerOf(_tankId) == sender,
@@ -204,7 +209,9 @@ contract SuperFactory is
             "Superfactory: the number of clone is exceed"
         );
 
-        bytes32 hashMessage = keccak256(abi.encodePacked(cloneId, _tankId));
+        bytes32 hashMessage = keccak256(
+            abi.encodePacked(sender, cloneId, _tankId)
+        );
         bytes32 prefixed = hashMessage.prefixed();
         address singer = prefixed.recoverSigner(_signature);
         require(
@@ -253,6 +260,7 @@ contract SuperFactory is
 
         BoxTankInfo storage boxInfo = boxTankInfo[_boxId];
         require(boxInfo.tankId > 0, "Superfactory: Box is not exists");
+        require(!boxInfo.claimed, "Superfactory: Box claimed already");
         require(
             boxInfo.timeBuildFinish < block.timestamp,
             "Superfactory: Box finished build"
@@ -268,7 +276,7 @@ contract SuperFactory is
             boxInfo.speedUpNumber += 1;
         }
 
-        emit SpeedUp(_boxId, boxInfo.timeBuildFinish);
+        emit SpeedUpCloneTank(_boxId, boxInfo.timeBuildFinish);
     }
 
     function claimTank(uint256 _boxId) public whenNotPaused nonReentrant {
@@ -280,14 +288,15 @@ contract SuperFactory is
 
         BoxTankInfo memory boxInfo = boxTankInfo[_boxId];
         require(boxInfo.tankId > 0, "Superfactory: Box is not exists");
+        require(!boxInfo.claimed, "Superfactory: Box claimed already");
         require(
-            boxInfo.timeBuildFinish >= block.timestamp,
+            boxInfo.timeBuildFinish <= block.timestamp,
             "Superfactory: Cannot claim tank"
         );
 
-        emit ClaimTank(sender, boxInfo.cloneId, boxInfo.tankId, _boxId);
+        boxTankInfo[_boxId].claimed = true;
 
-        delete boxTankInfo[_boxId];
+        emit ClaimTank(sender, boxInfo.cloneId, boxInfo.tankId, _boxId);
     }
 
     function _getTimeToBuild() internal view returns (uint256) {

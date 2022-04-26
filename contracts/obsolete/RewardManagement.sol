@@ -38,7 +38,7 @@ contract RewardManagement is
     PausableUpgradeable
 {
     using SafeMath for uint256;
-    using SafeMath for uint32;
+    using SafeMath for uint256;
     using Signature for bytes32;
     using SafeERC20 for IERC20;
 
@@ -65,9 +65,9 @@ contract RewardManagement is
 
     uint256 public expiredTime;
 
-    mapping(address => mapping(uint32 => uint256)) private _userQuota;
+    mapping(address => mapping(uint256 => uint256)) private _userQuota;
 
-    mapping(uint32 => uint256) private _dateQuota;
+    mapping(uint256 => uint256) private _dateQuota;
 
     mapping(string => bool) private _claimId;
 
@@ -227,7 +227,7 @@ contract RewardManagement is
             "RewardManagement: Signature Invalid"
         );
 
-        uint32 date = _getCurrentDate();
+        uint256 date = _getCurrentDate();
         if (verifyQuota) {
             require(amount <= quotaClaim, "RewardManagement: Amount Is Exceed");
 
@@ -288,7 +288,7 @@ contract RewardManagement is
     }
 
     function getRemainQuota() external view returns (uint256) {
-        uint32 date = _getCurrentDate();
+        uint256 date = _getCurrentDate();
         return quotaMintPerDate - _dateQuota[date];
     }
 
@@ -298,7 +298,7 @@ contract RewardManagement is
         notNull(_address)
         returns (uint256)
     {
-        uint32 date = _getCurrentDate();
+        uint256 date = _getCurrentDate();
         return quotaUserMintPerDate - _userQuota[_address][date];
     }
 
@@ -337,8 +337,8 @@ contract RewardManagement is
         emit FixTank(sender, _tankId, _erc20, ownerFee, renterFee, _fixId);
     }
 
-    function _getCurrentDate() internal view returns (uint32) {
-        return uint32(block.timestamp / SECONDS_PER_DATE);
+    function _getCurrentDate() internal view returns (uint256) {
+        return (block.timestamp / SECONDS_PER_DATE);
     }
 
     function _calculateFee(uint256 _price, uint256 _feePercent)
