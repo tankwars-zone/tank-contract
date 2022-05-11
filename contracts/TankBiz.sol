@@ -68,7 +68,8 @@ contract TankBiz is
         uint256 cloneId1,
         uint256 cloneId2,
         uint256 tankId,
-        uint256 currentStage
+        uint256 currentStage,
+        uint256 timeFinishStage
     );
 
     event SetCloneTankStage(
@@ -537,9 +538,15 @@ contract TankBiz is
         CloneTankInfo storage cloneInfo = cloneTankInfos[boxId];
         cloneInfo.parentTankId1 = _tankId1;
         cloneInfo.parentTankId2 = _tankId2;
-        cloneInfo.timeFinishStage = block.timestamp;
         cloneInfo.timeBeginStage = block.timestamp;
         cloneInfo.currentStage = 1;
+
+        if (numberCloneTankStage > 1) {
+            CloneTankStage memory stage = cloneTankStages[2];
+            cloneInfo.timeFinishStage = block.timestamp + stage.timeToBuild;
+        } else {
+            cloneInfo.timeFinishStage = block.timestamp;
+        }
 
         emit CloneTank(
             sender,
@@ -548,7 +555,8 @@ contract TankBiz is
             cloneId1,
             cloneId2,
             boxId,
-            1
+            1,
+            cloneInfo.timeFinishStage
         );
     }
 
@@ -623,6 +631,7 @@ contract TankBiz is
         }
 
         cloneInfo.currentStage = nextStageId;
+        cloneInfo.timeBeginStage = block.timestamp;
         if (nextStageId == numberCloneTankStage) {
             cloneInfo.claimed = true;
             emit ClaimTank(
@@ -633,57 +642,12 @@ contract TankBiz is
             );
         } else {
             cloneInfo.timeFinishStage = block.timestamp + stage.timeToBuild;
-            cloneInfo.timeBeginStage = block.timestamp;
-
             emit MorphToNextStage(
                 _tankId,
                 cloneInfo.currentStage,
                 cloneInfo.timeFinishStage
             );
         }
-    }
-
-    function claimReward(
-        uint256 _amount,
-        uint256 _timestamp,
-        string calldata _claimId,
-        bytes calldata _signature
-    ) external nonReentrant whenNotPaused {
-        address sender = _msgSender();
-
-        require(
-            (block.timestamp - _timestamp) <= expireTransactionIn,
-            "TankBiz: Transaction Expired"
-        );
-
-        require(!_claimedId[_claimId], "TankBiz: Transaction Executed");
-
-        _checkSignature(
-            keccak256(abi.encodePacked(_amount, _timestamp, _claimId)),
-            _signature
-        );
-
-        uint256 date = _getCurrentDate();
-        if (verifyQuota) {
-            require(_amount <= quotaClaim, "TankBiz: Amount Is Exceed");
-
-            require(
-                _dateQuota[date] + _amount <= quotaMintPerDate,
-                "TankBiz: Quota Per Date Exceed"
-            );
-
-            require(
-                _userQuota[sender][date] + _amount <= quotaUserMintPerDate,
-                "TankBiz: Quota User Per Date Exceed"
-            );
-        }
-
-        _dateQuota[date] = _dateQuota[date].add(_amount);
-        _userQuota[sender][date] = _userQuota[sender][date].add(_amount);
-        _claimedId[_claimId] = true;
-        tglod.mint(sender, _amount);
-
-        emit ClaimReward(sender, _amount, _claimId);
     }
 
     function fixTank(
