@@ -39,8 +39,6 @@ contract TankBiz is
 
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
-    uint256 public TIME_TO_BUILD_TANK;
-
     event RentCreated(
         address erc721,
         uint256 tokenId,
@@ -65,24 +63,38 @@ contract TankBiz is
 
     event CloneTank(
         address user,
-        uint256 cloneId,
-        uint256 parentTankId,
+        uint256 parentTankId1,
+        uint256 parentTankId2,
+        uint256 cloneId1,
+        uint256 cloneId2,
         uint256 tankId,
+        uint256 currentStage
+    );
+
+    event SetCloneTankStage(
+        address speedupFeeToken,
+        uint256 speedupFee,
+        address feeToken,
+        uint256 fee,
         uint256 timeToBuild
     );
 
-    event SetSpeedUpFeeCloneTank(
-        address speedupToken,
-        uint256 speedupFee,
-        uint256 speedupTime
+    event SpeedUpCloneTank(
+        uint256 tankId,
+        uint256 currentStage,
+        uint256 timeFinishStage
     );
 
-    event SpeedUpCloneTank(uint256 tankId, uint256 timeToBuild);
+    event MorphToNextStage(
+        uint256 tankId,
+        uint256 currentStage,
+        uint256 timeFinishStage
+    );
 
     event ClaimTank(
         address user,
-        uint256 cloneId,
-        uint256 parentTankId,
+        uint256 parentTankId1,
+        uint256 parentTankId2,
         uint256 tankId
     );
 
@@ -118,11 +130,20 @@ contract TankBiz is
     }
 
     struct CloneTankInfo {
-        uint256 parentTankId;
-        uint256 cloneId;
-        uint256 timeBuildFinish;
-        uint256 speedUpNumber;
+        uint256 parentTankId1;
+        uint256 parentTankId2;
+        uint256 currentStage;
+        uint256 timeBeginStage;
+        uint256 timeFinishStage;
         bool claimed;
+    }
+
+    struct CloneTankStage {
+        IERC20 speedupFeeToken;
+        uint256 speedupFee;
+        IERC20 feeToken;
+        uint256 fee;
+        uint256 timeToBuild;
     }
 
     // ------ variable ---------------
@@ -138,19 +159,18 @@ contract TankBiz is
 
     mapping(uint256 => uint256) public numberCloned;
 
-    // tankId ==> price
+    // cloneId ==> price
     mapping(uint256 => CloneTankPrice[]) public cloneTankPrices;
 
     // tankId ==> time to build
     mapping(uint256 => CloneTankInfo) public cloneTankInfos;
 
+    // cloneId ==> price
+    mapping(uint256 => CloneTankStage) public cloneTankStages;
+
+    uint256 public numberCloneTankStage;
+
     address public treasuryWallet;
-
-    IERC20 public speedupToken;
-
-    uint256 public speedupFee;
-
-    uint256 public speedupTime;
 
     // Claim Reward
     uint256 public expireTransactionIn;
@@ -210,11 +230,10 @@ contract TankBiz is
         _setupRole(SIGNER_ROLE, _msgSender());
         _setupRole(OPERATOR_ROLE, _msgSender());
         maximunClone = 7;
-        TIME_TO_BUILD_TANK = 86400 * 7;
-        speedupTime = 86400 * 7;
         treasuryWallet = _msgSender();
         expireTransactionIn = 300;
         verifyQuota = true;
+        numberCloneTankStage = 4;
     }
 
     function pause() public onlyAdmin {
@@ -249,33 +268,47 @@ contract TankBiz is
         tglod = _tglod;
     }
 
-    function setMaximunClone(uint256 _maximunClone) external onlyOperator {
-        maximunClone = _maximunClone;
+    function setNumberCloneTankStage(uint256 _numberCloneTankStage)
+        external
+        onlyOperator
+    {
+        if (numberCloneTankStage != _numberCloneTankStage) {
+            numberCloneTankStage = _numberCloneTankStage;
+        }
     }
 
-    function setTimeToBuildTank(uint256 _timeToBuild) external onlyOperator {
-        TIME_TO_BUILD_TANK = _timeToBuild;
-    }
-
-    function setSpeedUpCloneTankFee(
-        IERC20 _speedupToken,
+    function setCloneTankStage(
+        uint256 _stage,
+        IERC20 _speedupFeeToken,
         uint256 _speedupFee,
-        uint256 _speedupTime
+        IERC20 _feeToken,
+        uint256 _fee,
+        uint256 _timeToBuild
     ) external onlyOperator {
-        speedupToken = _speedupToken;
+        require(_stage <= numberCloneTankStage, "TankBiz: stage invalid");
 
-        if (speedupFee != _speedupFee) {
-            speedupFee = _speedupFee;
+        CloneTankStage storage cloneTankStage = cloneTankStages[_stage];
+        cloneTankStage.speedupFeeToken = _speedupFeeToken;
+        cloneTankStage.feeToken = _feeToken;
+
+        if (cloneTankStage.speedupFee != _speedupFee) {
+            cloneTankStage.speedupFee = _speedupFee;
         }
 
-        if (speedupTime != _speedupTime) {
-            speedupTime = _speedupTime;
+        if (cloneTankStage.timeToBuild != _timeToBuild) {
+            cloneTankStage.timeToBuild = _timeToBuild;
         }
 
-        emit SetSpeedUpFeeCloneTank(
-            address(speedupToken),
-            speedupFee,
-            speedupTime
+        if (cloneTankStage.fee != _fee) {
+            cloneTankStage.fee = _fee;
+        }
+
+        emit SetCloneTankStage(
+            address(cloneTankStage.speedupFeeToken),
+            cloneTankStage.speedupFee,
+            address(cloneTankStage.feeToken),
+            cloneTankStage.fee,
+            cloneTankStage.timeToBuild
         );
     }
 
@@ -436,38 +469,55 @@ contract TankBiz is
         return info.owner != address(0);
     }
 
-    function cloneTank(uint256 _tankId, bytes calldata _signature)
-        external
-        payable
-        whenNotPaused
-        nonReentrant
-    {
+    function cloneTank(
+        uint256 _tankId1,
+        uint256 _tankId2,
+        bytes calldata _signature
+    ) external payable whenNotPaused nonReentrant {
         address sender = _msgSender();
-        uint256 cloneId = numberCloned[_tankId] + 1;
-        uint256 timeToBuild = _getTimeToBuild();
         require(
-            tank.ownerOf(_tankId) == sender,
+            tank.ownerOf(_tankId1) == sender &&
+                tank.ownerOf(_tankId2) == sender,
             "TankBiz: must be owner of token"
         );
 
+        uint256 cloneId1 = numberCloned[_tankId1] + 1;
+        uint256 cloneId2 = numberCloned[_tankId2] + 1;
+
         require(
-            cloneId <= maximunClone,
+            cloneId1 <= maximunClone && cloneId2 <= maximunClone,
             "TankBiz: the number of clone is exceed"
         );
 
-        bytes32 hashMessage = keccak256(
-            abi.encodePacked(sender, cloneId, _tankId)
+        _checkSignature(
+            keccak256(abi.encodePacked(sender, _tankId1, _tankId2)),
+            _signature
         );
-        bytes32 prefixed = hashMessage.prefixed();
-        address singer = prefixed.recoverSigner(_signature);
-        require(hasRole(SIGNER_ROLE, singer), "TankBiz: Signature Invalid");
 
-        CloneTankPrice[] memory prices = cloneTankPrices[cloneId];
-        uint256 priceLength = prices.length;
-        require(priceLength > 0, "TankBiz: must be set price to clone tank");
+        CloneTankPrice[] memory priceTank1 = cloneTankPrices[cloneId1];
+        CloneTankPrice[] memory priceTank2 = cloneTankPrices[cloneId2];
+        uint256 priceTank1Length = priceTank1.length;
+        uint256 priceTank2Length = priceTank2.length;
+        require(
+            priceTank1Length > 0 && priceTank2Length > 0,
+            "TankBiz: must be set price to clone tank"
+        );
 
-        for (uint256 i = 0; i < priceLength; i++) {
-            CloneTankPrice memory price = prices[i];
+        for (uint256 i = 0; i < priceTank1Length; i++) {
+            CloneTankPrice memory price = priceTank1[i];
+            if (price.token == address(0)) {
+                payable(treasuryWallet).transfer(price.price);
+            } else {
+                IERC20(price.token).safeTransferFrom(
+                    sender,
+                    treasuryWallet,
+                    price.price
+                );
+            }
+        }
+
+        for (uint256 i = 0; i < priceTank2Length; i++) {
+            CloneTankPrice memory price = priceTank2[i];
             if (price.token == address(0)) {
                 payable(treasuryWallet).transfer(price.price);
             } else {
@@ -480,15 +530,26 @@ contract TankBiz is
         }
 
         tank.mint(sender);
-        numberCloned[_tankId]++;
+        numberCloned[_tankId1]++;
+        numberCloned[_tankId2]++;
 
         uint256 boxId = tank.currentId();
         CloneTankInfo storage cloneInfo = cloneTankInfos[boxId];
-        cloneInfo.cloneId = cloneId;
-        cloneInfo.parentTankId = _tankId;
-        cloneInfo.timeBuildFinish = timeToBuild;
+        cloneInfo.parentTankId1 = _tankId1;
+        cloneInfo.parentTankId2 = _tankId2;
+        cloneInfo.timeFinishStage = block.timestamp;
+        cloneInfo.timeBeginStage = block.timestamp;
+        cloneInfo.currentStage = 1;
 
-        emit CloneTank(sender, cloneId, _tankId, boxId, timeToBuild);
+        emit CloneTank(
+            sender,
+            _tankId1,
+            _tankId2,
+            cloneId1,
+            cloneId2,
+            boxId,
+            1
+        );
     }
 
     function speedUpCloneTank(uint256 _tankId)
@@ -503,35 +564,43 @@ contract TankBiz is
         );
 
         CloneTankInfo storage cloneInfo = cloneTankInfos[_tankId];
-        require(cloneInfo.parentTankId > 0, "TankBiz: Box is not exists");
+        require(cloneInfo.timeFinishStage > 0, "TankBiz: Box is not exists");
         require(!cloneInfo.claimed, "TankBiz: Box claimed already");
+
+        uint256 nextStageId = cloneInfo.currentStage + 1;
+        require(nextStageId <= numberCloneTankStage, "TankBiz: Stage invalid");
+
         require(
-            cloneInfo.timeBuildFinish > block.timestamp,
-            "TankBiz: Box finished build"
+            cloneInfo.timeFinishStage > block.timestamp,
+            "TankBiz: Stage time is finished"
         );
 
-        speedupToken.safeTransferFrom(sender, treasuryWallet, speedupFee);
-       
-        if (cloneInfo.timeBuildFinish - speedupTime <= block.timestamp) {
-            cloneInfo.timeBuildFinish = block.timestamp;
-            emit ClaimTank(
-                sender,
-                cloneInfo.cloneId,
-                cloneInfo.parentTankId,
-                _tankId
-            );
-            cloneInfo.claimed = true;
-        }
-        else{
-            cloneInfo.timeBuildFinish -= speedupTime;
-        }
-      
-        cloneInfo.speedUpNumber += 1;
+        CloneTankStage memory stage = cloneTankStages[nextStageId];
 
-        emit SpeedUpCloneTank(_tankId, cloneInfo.timeBuildFinish);
+        if (
+            address(stage.speedupFeeToken) != address(0) && stage.speedupFee > 0
+        ) {
+            stage.speedupFeeToken.safeTransferFrom(
+                sender,
+                treasuryWallet,
+                stage.speedupFee
+            );
+        }
+
+        cloneInfo.timeFinishStage -= stage.timeToBuild;
+
+        emit SpeedUpCloneTank(
+            _tankId,
+            cloneInfo.currentStage,
+            cloneInfo.timeFinishStage
+        );
     }
 
-    function claimTank(uint256 _tankId) public whenNotPaused nonReentrant {
+    function morphToNextStage(uint256 _tankId)
+        external
+        whenNotPaused
+        nonReentrant
+    {
         address sender = _msgSender();
         require(
             tank.ownerOf(_tankId) == sender,
@@ -539,21 +608,39 @@ contract TankBiz is
         );
 
         CloneTankInfo storage cloneInfo = cloneTankInfos[_tankId];
-        require(cloneInfo.parentTankId > 0, "TankBiz: Tank is not exists");
+        require(cloneInfo.timeFinishStage > 0, "TankBiz: Tank is not exists");
         require(!cloneInfo.claimed, "TankBiz: Tank claimed already");
+
         require(
-            cloneInfo.timeBuildFinish <= block.timestamp,
-            "TankBiz: Cannot claim tank"
+            cloneInfo.timeFinishStage <= block.timestamp,
+            "TankBiz: build not finish"
         );
 
-        cloneInfo.claimed = true;
+        uint256 nextStageId = cloneInfo.currentStage + 1;
+        CloneTankStage memory stage = cloneTankStages[nextStageId];
+        if (address(stage.feeToken) != address(0) && stage.fee > 0) {
+            stage.feeToken.safeTransferFrom(sender, treasuryWallet, stage.fee);
+        }
 
-        emit ClaimTank(
-            sender,
-            cloneInfo.cloneId,
-            cloneInfo.parentTankId,
-            _tankId
-        );
+        cloneInfo.currentStage = nextStageId;
+        if (nextStageId == numberCloneTankStage) {
+            cloneInfo.claimed = true;
+            emit ClaimTank(
+                sender,
+                cloneInfo.parentTankId1,
+                cloneInfo.parentTankId2,
+                _tankId
+            );
+        } else {
+            cloneInfo.timeFinishStage = block.timestamp + stage.timeToBuild;
+            cloneInfo.timeBeginStage = block.timestamp;
+
+            emit MorphToNextStage(
+                _tankId,
+                cloneInfo.currentStage,
+                cloneInfo.timeFinishStage
+            );
+        }
     }
 
     function claimReward(
@@ -571,12 +658,10 @@ contract TankBiz is
 
         require(!_claimedId[_claimId], "TankBiz: Transaction Executed");
 
-        bytes32 hashMessage = keccak256(
-            abi.encodePacked(_amount, _timestamp, _claimId)
+        _checkSignature(
+            keccak256(abi.encodePacked(_amount, _timestamp, _claimId)),
+            _signature
         );
-        bytes32 prefixed = hashMessage.prefixed();
-        address singer = prefixed.recoverSigner(_signature);
-        require(hasRole(SIGNER_ROLE, singer), "TankBiz: Signature Invalid");
 
         uint256 date = _getCurrentDate();
         if (verifyQuota) {
@@ -614,25 +699,21 @@ contract TankBiz is
         Rent memory info = rents[_tankId];
 
         if (info.owner != address(0)) {
-            _payFixTankFeeForRent(tokenOwner, _tankId, _erc20, _fixId, info);
+            require(
+                sender == info.owner || sender == info.renter,
+                "TankBiz: Caller invalid"
+            );
         } else {
             require(sender == tokenOwner, "TankBiz: Must be token owner");
-
-            IERC20(_erc20).safeTransferFrom(
-                sender,
-                treasuryWallet,
-                priceFixTank[_erc20]
-            );
-
-            emit FixTank(
-                sender,
-                _tankId,
-                _erc20,
-                priceFixTank[_erc20],
-                0,
-                _fixId
-            );
         }
+
+        IERC20(_erc20).safeTransferFrom(
+            sender,
+            treasuryWallet,
+            priceFixTank[_erc20]
+        );
+
+        emit FixTank(sender, _tankId, _erc20, priceFixTank[_erc20], 0, _fixId);
 
         _fixTankId[_fixId] = true;
     }
@@ -652,46 +733,13 @@ contract TankBiz is
         return quotaUserMintPerDate - _userQuota[_address][date];
     }
 
-    function _payFixTankFeeForRent(
-        address _tokenOwner,
-        uint256 _tankId,
-        address _erc20,
-        string memory _fixId,
-        Rent memory _info
-    ) internal {
-        address sender = _msgSender();
-
-        require(
-            (sender == _info.owner || sender == _info.renter) &&
-                _tokenOwner == _info.owner,
-            "TankBiz: Caller invalid"
-        );
-
-        uint256 price = priceFixTank[_erc20];
-        uint256 ownerFee = _calculateFee(price, _info.percentOwner);
-        uint256 renterFee = _calculateFee(price, _info.percentRenter);
-
-        if (ownerFee > 0) {
-            IERC20(_erc20).safeTransferFrom(
-                _info.owner,
-                treasuryWallet,
-                ownerFee
-            );
-        }
-
-        if (renterFee > 0) {
-            IERC20(_erc20).safeTransferFrom(
-                _info.renter,
-                treasuryWallet,
-                renterFee
-            );
-        }
-
-        emit FixTank(sender, _tankId, _erc20, ownerFee, renterFee, _fixId);
-    }
-
-    function _getTimeToBuild() internal view returns (uint256) {
-        return block.timestamp + TIME_TO_BUILD_TANK;
+    function _checkSignature(bytes32 _hashMessage, bytes memory _signature)
+        internal
+        view
+    {
+        bytes32 prefixed = _hashMessage.prefixed();
+        address singer = prefixed.recoverSigner(_signature);
+        require(hasRole(SIGNER_ROLE, singer), "TankBiz: Signature Invalid");
     }
 
     function _getCurrentDate() internal view returns (uint256) {
