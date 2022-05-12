@@ -111,9 +111,8 @@ contract TankBiz is
         address user,
         uint256 tankId,
         address erc20,
-        uint256 ownerFee,
-        uint256 renterFee,
-        string claimId
+        uint256 fee,
+        string fixTankId
     );
 
     // ------ Struct ---------------
@@ -677,7 +676,7 @@ contract TankBiz is
             priceFixTank[_erc20]
         );
 
-        emit FixTank(sender, _tankId, _erc20, priceFixTank[_erc20], 0, _fixId);
+        emit FixTank(sender, _tankId, _erc20, priceFixTank[_erc20], _fixId);
 
         _fixTankId[_fixId] = true;
     }
