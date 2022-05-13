@@ -11,7 +11,7 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 import "./libs/Signature.sol";
 
-interface ITGlod is IERC20 {
+interface ITGold is IERC20 {
     function mint(address to, uint256 amount) external;
 }
 
@@ -150,12 +150,12 @@ contract TankBiz is
 
     ITank public tank;
 
-    ITGlod public tglod;
+    ITGold public tgold;
 
     // token id => sell order
     mapping(uint256 => Rent) public rents;
 
-    uint256 public maximunClone;
+    uint256 public maximumClone;
 
     mapping(uint256 => uint256) public numberCloned;
 
@@ -229,7 +229,7 @@ contract TankBiz is
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _setupRole(SIGNER_ROLE, _msgSender());
         _setupRole(OPERATOR_ROLE, _msgSender());
-        maximunClone = 7;
+        maximumClone = 7;
         treasuryWallet = _msgSender();
         expireTransactionIn = 300;
         verifyQuota = true;
@@ -260,12 +260,12 @@ contract TankBiz is
         tank = _tank;
     }
 
-    function setTgold(ITGlod _tglod)
+    function setTgold(ITGold _tgold)
         external
         onlyOperator
-        notNull(address(_tglod))
+        notNull(address(_tgold))
     {
-        tglod = _tglod;
+        tgold = _tgold;
     }
 
     function setNumberCloneTankStage(uint256 _numberCloneTankStage)
@@ -274,6 +274,12 @@ contract TankBiz is
     {
         if (numberCloneTankStage != _numberCloneTankStage) {
             numberCloneTankStage = _numberCloneTankStage;
+        }
+    }
+
+    function setmaximumClone(uint256 _maximumClone) external onlyOperator {
+        if (maximumClone != _maximumClone) {
+            maximumClone = _maximumClone;
         }
     }
 
@@ -485,7 +491,7 @@ contract TankBiz is
         uint256 cloneId2 = numberCloned[_tankId2] + 1;
 
         require(
-            cloneId1 <= maximunClone && cloneId2 <= maximunClone,
+            cloneId1 <= maximumClone && cloneId2 <= maximumClone,
             "TankBiz: the number of clone is exceed"
         );
 
@@ -594,7 +600,12 @@ contract TankBiz is
             );
         }
 
-        cloneInfo.timeFinishStage -= stage.timeToBuild;
+       if(cloneInfo.timeFinishStage - stage.timeToBuild < block.timestamp){
+           cloneInfo.timeFinishStage = block.timestamp;
+       }
+       else{
+           cloneInfo.timeFinishStage -= stage.timeToBuild;
+       }
 
         emit SpeedUpCloneTank(
             _tankId,
@@ -633,6 +644,13 @@ contract TankBiz is
         cloneInfo.timeBeginStage = block.timestamp;
         if (nextStageId == numberCloneTankStage) {
             cloneInfo.claimed = true;
+            cloneInfo.timeFinishStage = block.timestamp;
+             emit MorphToNextStage(
+                _tankId,
+                cloneInfo.currentStage,
+                cloneInfo.timeFinishStage
+            );
+
             emit ClaimTank(
                 sender,
                 cloneInfo.parentTankId1,
@@ -640,13 +658,22 @@ contract TankBiz is
                 _tankId
             );
         } else {
-            cloneInfo.timeFinishStage = block.timestamp + stage.timeToBuild;
+            CloneTankStage memory stageNext = cloneTankStages[nextStageId + 1];
+            cloneInfo.timeFinishStage = block.timestamp + stageNext.timeToBuild;
             emit MorphToNextStage(
                 _tankId,
                 cloneInfo.currentStage,
                 cloneInfo.timeFinishStage
             );
         }
+    }
+
+    function cloneTankPriceNumber(uint256 _cloneId)
+        external
+        view
+        returns (uint256)
+    {
+        return cloneTankPrices[_cloneId].length;
     }
 
     function fixTank(
