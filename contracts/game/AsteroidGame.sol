@@ -400,6 +400,11 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
         room.token.safeTransferFrom(msgSender, address(this), room.searchFee);
 
+        if (asteroid.reward == 0) {
+            asteroid.winnerRewardPercent = room.winnerRewardPercent;
+            asteroid.ownerRewardPercent = room.ownerRewardPercent;
+        }
+
         asteroid.reward += room.searchFee;
 
         uint256 weight = minSearchingWeight + asteroid.searchingWeight;
@@ -414,8 +419,6 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
 
         } else {
             asteroid.owner = msgSender;
-            asteroid.winnerRewardPercent = room.winnerRewardPercent;
-            asteroid.ownerRewardPercent = room.ownerRewardPercent;
             asteroid.collisionAt = block.timestamp + _random(minLifeTime, maxLifeTime);
             asteroid.status = ASTEROID_MOVING;
 
