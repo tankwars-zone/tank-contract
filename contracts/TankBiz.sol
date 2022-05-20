@@ -179,7 +179,7 @@ contract TankBiz is
 
     mapping(uint256 => uint256) private _dateQuota;
 
-    mapping(string => bool) private _claimedId;
+    mapping(string => bool) private _claimeds;
 
     uint256 public quotaMintPerDate;
 
@@ -384,6 +384,51 @@ contract TankBiz is
 
     function removePriceFixTank(address _erc20) external onlyOperator {
         delete priceFixTank[_erc20];
+    }
+
+    function claimReward(
+        uint256 _amount,
+        uint256 _timestamp,
+        string calldata _claimId,
+        bytes calldata _signature
+    ) external nonReentrant whenNotPaused {
+        address sender = _msgSender();
+
+        require(
+            (block.timestamp - _timestamp) <= expireTransactionIn,
+            "TankBiz: Transaction Expired"
+        );
+
+        require(!_claimeds[_claimId], "TankBiz: Transaction Executed");
+
+        bytes32 hashMessage = keccak256(
+            abi.encodePacked(sender, _amount, _timestamp, _claimId)
+        );
+        bytes32 prefixed = hashMessage.prefixed();
+        address singer = prefixed.recoverSigner(_signature);
+        require(hasRole(SIGNER_ROLE, singer), "TankBiz: Signature Invalid");
+
+        uint256 date = _getCurrentDate();
+        if (verifyQuota) {
+            require(_amount <= quotaClaim, "TankBiz: Amount Is Exceed");
+
+            require(
+                _dateQuota[date] + _amount <= quotaMintPerDate,
+                "TankBiz: Quota Per Date Exceed"
+            );
+
+            require(
+                _userQuota[sender][date] + _amount <= quotaUserMintPerDate,
+                "TankBiz: Quota User Per Date Exceed"
+            );
+        }
+
+        _dateQuota[date] = _dateQuota[date].add(_amount);
+        _userQuota[sender][date] = _userQuota[sender][date].add(_amount);
+        _claimeds[_claimId] = true;
+        tgold.mint(sender, _amount);
+
+        emit ClaimReward(sender, _amount, _claimId);
     }
 
     function rent(
@@ -600,12 +645,11 @@ contract TankBiz is
             );
         }
 
-       if(cloneInfo.timeFinishStage - stage.timeToBuild < block.timestamp){
-           cloneInfo.timeFinishStage = block.timestamp;
-       }
-       else{
-           cloneInfo.timeFinishStage -= stage.timeToBuild;
-       }
+        if (cloneInfo.timeFinishStage - stage.timeToBuild < block.timestamp) {
+            cloneInfo.timeFinishStage = block.timestamp;
+        } else {
+            cloneInfo.timeFinishStage -= stage.timeToBuild;
+        }
 
         emit SpeedUpCloneTank(
             _tankId,
@@ -645,7 +689,7 @@ contract TankBiz is
         if (nextStageId == numberCloneTankStage) {
             cloneInfo.claimed = true;
             cloneInfo.timeFinishStage = block.timestamp;
-             emit MorphToNextStage(
+            emit MorphToNextStage(
                 _tankId,
                 cloneInfo.currentStage,
                 cloneInfo.timeFinishStage
