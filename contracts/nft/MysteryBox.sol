@@ -6,8 +6,11 @@ import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 
-contract MysteryBox is AccessControlEnumerable, ERC721Enumerable, ERC721Burnable  {
-
+contract MysteryBox is
+    AccessControlEnumerable,
+    ERC721Enumerable,
+    ERC721Burnable
+{
     event BaseURIChanged(string uri);
 
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
@@ -16,7 +19,11 @@ contract MysteryBox is AccessControlEnumerable, ERC721Enumerable, ERC721Burnable
 
     uint256 public currentId;
 
-    constructor(string memory name, string memory symbol, string memory uri) ERC721(name, symbol) {
+    constructor(
+        string memory name,
+        string memory symbol,
+        string memory uri
+    ) ERC721(name, symbol) {
         _uri = uri;
 
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
@@ -25,7 +32,10 @@ contract MysteryBox is AccessControlEnumerable, ERC721Enumerable, ERC721Burnable
     }
 
     function setBaseURI(string memory uri) public virtual {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "MysteryBox: must have admin role to set");
+        require(
+            hasRole(DEFAULT_ADMIN_ROLE, _msgSender()),
+            "MysteryBox: must have admin role to set"
+        );
 
         require(bytes(uri).length > 0, "MysteryBox: uri is invalid");
 
@@ -35,13 +45,19 @@ contract MysteryBox is AccessControlEnumerable, ERC721Enumerable, ERC721Burnable
     }
 
     function mint(address to) public virtual {
-        require(hasRole(MINTER_ROLE, _msgSender()), "MysteryBox: must have minter role to mint");
+        require(
+            hasRole(MINTER_ROLE, _msgSender()),
+            "MysteryBox: must have minter role to mint"
+        );
 
         _mint(to, ++currentId);
     }
 
     function mintBatch(address[] memory accounts) public virtual {
-        require(hasRole(MINTER_ROLE, _msgSender()), "MysteryBox: must have minter role to mint");
+        require(
+            hasRole(MINTER_ROLE, _msgSender()),
+            "MysteryBox: must have minter role to mint"
+        );
 
         uint256 length = accounts.length;
 
@@ -60,12 +76,21 @@ contract MysteryBox is AccessControlEnumerable, ERC721Enumerable, ERC721Burnable
         return _uri;
     }
 
-    function _beforeTokenTransfer(address from, address to, uint256 tokenId) internal virtual override(ERC721, ERC721Enumerable) {
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 tokenId
+    ) internal virtual override(ERC721, ERC721Enumerable) {
         super._beforeTokenTransfer(from, to, tokenId);
     }
 
-    function supportsInterface(bytes4 interfaceId) public view virtual override(AccessControlEnumerable, ERC721, ERC721Enumerable) returns (bool) {
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        virtual
+        override(AccessControlEnumerable, ERC721, ERC721Enumerable)
+        returns (bool)
+    {
         return super.supportsInterface(interfaceId);
     }
-
 }

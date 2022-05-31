@@ -79,6 +79,8 @@ contract Marketplace is
         uint256 sellerPayment
     );
 
+    event RentingContractUpdated(address renting);
+
     uint256 public systemFeePercent;
 
     address public adminWallet;
@@ -112,6 +114,8 @@ contract Marketplace is
 
     // erc721 address => token id => sell order
     mapping(address => mapping(uint256 => Ask)) public asks;
+
+    address public rentingContract;
 
     modifier inWhitelist(address erc721, address erc20) {
         require(
@@ -148,6 +152,14 @@ contract Marketplace is
         adminWallet = wallet;
 
         emit AdminWalletUpdated(wallet);
+    }
+
+    function setRentingContract(address renting) public onlyOwner {
+        require(renting != address(0), "Marketplace: address is invalid");
+
+        rentingContract = renting;
+
+        emit RentingContractUpdated(renting);
     }
 
     function updateErc20Whitelist(address[] memory erc20s, bool status)
@@ -198,6 +210,10 @@ contract Marketplace is
 
         require(price > 0, "Marketplace: price must be greater than 0");
 
+        bool isRenting = IRenting(rentingContract).isRenting(erc721, tokenId);
+
+        require(isRenting == false, "Marketplace: erc721 is renting");
+
         Ask memory info = asks[erc721][tokenId];
 
         if (info.seller == address(0)) {
@@ -242,6 +258,9 @@ contract Marketplace is
         uint256 price
     ) public payable whenNotPaused nonReentrant inWhitelist(erc721, erc20) {
         require(price > 0, "Marketplace: price must be greater than 0");
+
+        bool isRenting = IRenting(rentingContract).isRenting(erc721, tokenId);
+        require(isRenting == false, "Marketplace: erc721 is renting");
 
         address msgSender = _msgSender();
 
@@ -455,4 +474,11 @@ contract Marketplace is
     {
         return (price * feePercent) / ONE_HUNDRED_PERCENT;
     }
+}
+
+interface IRenting {
+    function isRenting(address erc721, uint256 tokenId)
+        external
+        view
+        returns (bool);
 }

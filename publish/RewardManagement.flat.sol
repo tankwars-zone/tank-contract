@@ -972,6 +972,97 @@ abstract contract ReentrancyGuard {
 }
 
 
+// File @openzeppelin/contracts/security/Pausable.sol@v4.0.0
+
+
+pragma solidity ^0.8.0;
+
+/**
+ * @dev Contract module which allows children to implement an emergency stop
+ * mechanism that can be triggered by an authorized account.
+ *
+ * This module is used through inheritance. It will make available the
+ * modifiers `whenNotPaused` and `whenPaused`, which can be applied to
+ * the functions of your contract. Note that they will not be pausable by
+ * simply including this module, only once the modifiers are put in place.
+ */
+abstract contract Pausable is Context {
+    /**
+     * @dev Emitted when the pause is triggered by `account`.
+     */
+    event Paused(address account);
+
+    /**
+     * @dev Emitted when the pause is lifted by `account`.
+     */
+    event Unpaused(address account);
+
+    bool private _paused;
+
+    /**
+     * @dev Initializes the contract in unpaused state.
+     */
+    constructor () {
+        _paused = false;
+    }
+
+    /**
+     * @dev Returns true if the contract is paused, and false otherwise.
+     */
+    function paused() public view virtual returns (bool) {
+        return _paused;
+    }
+
+    /**
+     * @dev Modifier to make a function callable only when the contract is not paused.
+     *
+     * Requirements:
+     *
+     * - The contract must not be paused.
+     */
+    modifier whenNotPaused() {
+        require(!paused(), "Pausable: paused");
+        _;
+    }
+
+    /**
+     * @dev Modifier to make a function callable only when the contract is paused.
+     *
+     * Requirements:
+     *
+     * - The contract must be paused.
+     */
+    modifier whenPaused() {
+        require(paused(), "Pausable: not paused");
+        _;
+    }
+
+    /**
+     * @dev Triggers stopped state.
+     *
+     * Requirements:
+     *
+     * - The contract must not be paused.
+     */
+    function _pause() internal virtual whenNotPaused {
+        _paused = true;
+        emit Paused(_msgSender());
+    }
+
+    /**
+     * @dev Returns to normal state.
+     *
+     * Requirements:
+     *
+     * - The contract must be paused.
+     */
+    function _unpause() internal virtual whenPaused {
+        _paused = false;
+        emit Unpaused(_msgSender());
+    }
+}
+
+
 // File contracts/libs/Signature.sol
 
 pragma solidity ^0.8.0;
@@ -1035,22 +1126,27 @@ pragma solidity ^0.8.0;
 
 
 
+
 interface ITGlod {
     function mint(address to, uint256 amount) external;
 }
 
-contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
+contract RewardManagement is
+    AccessControlEnumerable,
+    ReentrancyGuard,
+    Pausable
+{
     using SafeMath for uint256;
     using SafeMath for uint32;
     using Signature for bytes32;
 
-    event ClaimReward(address, uint256, string);
+    event ClaimReward(address user, uint256 amount, string claimId);
 
     uint256 public constant SECOND_PER_DATE = 86400;
     bytes32 public constant SIGNER_ROLE = keccak256("SIGNER_ROLE");
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
-    ITGlod tglod;
+    ITGlod public tglod;
     uint256 private _expiredTime = 300;
     mapping(address => mapping(uint32 => uint256)) private _userQuota;
     mapping(uint32 => uint256) private _dateQuota;
@@ -1062,8 +1158,16 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
 
     modifier onlyOperator() {
         require(
-            hasRole(SIGNER_ROLE, _msgSender()),
+            hasRole(OPERATOR_ROLE, _msgSender()),
             "RewardManagement: Must Have Operator Role"
+        );
+        _;
+    }
+
+    modifier onlyAdmin() {
+        require(
+            hasRole(DEFAULT_ADMIN_ROLE, _msgSender()),
+            "RewardManagement: Must Have Admin Role"
         );
         _;
     }
@@ -1097,6 +1201,14 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
         tglod = _tglod;
     }
 
+    function pause() public onlyAdmin {
+        _pause();
+    }
+
+    function unpause() public onlyAdmin {
+        _unpause();
+    }
+
     function setQuotaMintPerDate(uint256 amount) external onlyOperator {
         require(amount > 0, "RewardManagement: Amount Invalid");
         quotaUserMintPerDate = amount;
@@ -1126,7 +1238,7 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
         uint256 timestamp,
         string calldata claimId,
         bytes calldata signature
-    ) external nonReentrant {
+    ) external nonReentrant whenNotPaused {
         require(
             (block.timestamp - timestamp) <= _expiredTime,
             "RewardManagement: Transaction Expired"
@@ -1149,12 +1261,12 @@ contract RewardManagement is AccessControlEnumerable, ReentrancyGuard {
             require(amount <= quotaClaim, "RewardManagement: Amount Is Exceed");
 
             require(
-                _dateQuota[date] <= quotaMintPerDate,
+                _dateQuota[date] + amount <= quotaMintPerDate,
                 "RewardManagement: Quota Per Date Exceed"
             );
 
             require(
-                _userQuota[_msgSender()][date] <= quotaUserMintPerDate,
+                _userQuota[_msgSender()][date] + amount <= quotaUserMintPerDate,
                 "RewardManagement: Quota User Per Date Exceed"
             );
         }
