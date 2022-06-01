@@ -55,6 +55,14 @@ contract TankBiz is
         address renter
     );
 
+    event CreatedRent(
+        address erc721,
+        uint256 tankId,
+        address owner,
+        uint256 percentOwner,
+        uint256 percentRenter
+    );
+
     event RentAccepted(
         address erc721,
         uint256 tankId,
@@ -486,11 +494,10 @@ contract TankBiz is
             _percentRenter
         );
 
-        emit RentCreated(
+        emit CreatedRent(
             address(tank),
             _tankId,
             msgSender,
-            address(0),
             _percentOwner,
             _percentRenter
         );
