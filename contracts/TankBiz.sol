@@ -41,7 +41,7 @@ contract TankBiz is
 
     event RentCreated(
         address erc721,
-        uint256 tokenId,
+        uint256 tankId,
         address owner,
         address renter,
         uint256 percentOwner,
@@ -50,7 +50,7 @@ contract TankBiz is
 
     event RentCanceled(
         address erc721,
-        uint256 tokenId,
+        uint256 tankId,
         address owner,
         address renter
     );
