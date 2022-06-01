@@ -446,8 +446,8 @@ contract TankBiz is
 
     function createRent(
         uint256 _tankId,
-        uint256 _ownerPercent,
-        uint256 _renterPercent
+        uint256 _percentOwner,
+        uint256 _percentRenter
     ) public whenNotPaused nonReentrant {
         address msgSender = _msgSender();
 
@@ -456,17 +456,17 @@ contract TankBiz is
         require(nftOwner == msgSender, "TankBiz: only owner can rent");
 
         require(
-            _ownerPercent <= ONE_HUNDRED_PERCENT,
+            _percentOwner <= ONE_HUNDRED_PERCENT,
             "TankBiz: can not rent if owner percent over 100%"
         );
 
         require(
-            _renterPercent <= ONE_HUNDRED_PERCENT,
+            _percentRenter <= ONE_HUNDRED_PERCENT,
             "TankBiz: can not rent if renter percent over 100%"
         );
 
         require(
-            (_ownerPercent + _renterPercent) == ONE_HUNDRED_PERCENT,
+            (_percentOwner + _percentRenter) == ONE_HUNDRED_PERCENT,
             "TankBiz: can not rent if total percent difference 100%"
         );
 
@@ -482,8 +482,8 @@ contract TankBiz is
         rents[_tankId] = Rent(
             msgSender,
             address(0),
-            _ownerPercent,
-            _renterPercent
+            _percentOwner,
+            _percentRenter
         );
 
         emit RentCreated(
@@ -491,8 +491,8 @@ contract TankBiz is
             _tankId,
             msgSender,
             address(0),
-            _ownerPercent,
-            _renterPercent
+            _percentOwner,
+            _percentRenter
         );
     }
 
