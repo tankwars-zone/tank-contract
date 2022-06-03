@@ -538,7 +538,11 @@ contract TankBiz is
             "TankBiz: only owner can cancel rent"
         );
 
-        tank.transferFrom(address(this), msgSender, _tankId);
+        address nftOwner = tank.ownerOf(_tankId);
+        
+        if (nftOwner == address(this)) {
+            tank.transferFrom(address(this), msgSender, _tankId);
+        }
 
         emit RentCanceled(address(tank), _tankId, msgSender, info.renter);
 
