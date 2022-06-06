@@ -41,7 +41,7 @@ contract TankBiz is
 
     event RentCreated(
         address erc721,
-        uint256 tokenId,
+        uint256 tankId,
         address owner,
         address renter,
         uint256 percentOwner,
@@ -50,8 +50,14 @@ contract TankBiz is
 
     event RentCanceled(
         address erc721,
-        uint256 tokenId,
+        uint256 tankId,
         address owner,
+        address renter
+    );
+
+    event RentAccepted(
+        address erc721,
+        uint256 tankId,
         address renter
     );
 
@@ -431,17 +437,17 @@ contract TankBiz is
         emit ClaimReward(sender, _amount, _claimId);
     }
 
-    function rent(
-        uint256 _tokenId,
+    function setRent(
+        uint256 _tankId,
         address _renter,
         uint256 _percentOwner,
         uint256 _percentRenter
     ) public whenNotPaused nonReentrant {
         address msgSender = _msgSender();
 
-        address nftOwner = tank.ownerOf(_tokenId);
+        address nftOwner = tank.ownerOf(_tankId);
 
-        require(nftOwner == msgSender, "TankBiz: can not rent");
+        require(nftOwner == msgSender, "TankBiz: only owner can set rent");
 
         require(
             nftOwner != _renter,
@@ -463,14 +469,16 @@ contract TankBiz is
             "TankBiz: can not rent if total percent difference 100%"
         );
 
-        Rent memory info = rents[_tokenId];
+        Rent memory info = rents[_tankId];
 
         require(
             info.owner == address(0),
             "TankBiz: can not rent if erc721 already rented"
         );
 
-        rents[_tokenId] = Rent(
+        tank.transferFrom(msgSender, address(this), _tankId);
+
+        rents[_tankId] = Rent(
             msgSender,
             _renter,
             _percentOwner,
@@ -479,7 +487,7 @@ contract TankBiz is
 
         emit RentCreated(
             address(tank),
-            _tokenId,
+            _tankId,
             msgSender,
             _renter,
             _percentOwner,
@@ -487,24 +495,58 @@ contract TankBiz is
         );
     }
 
-    function cancelRent(uint256 _tokenId) public whenNotPaused nonReentrant {
+    function acceptRent(
+        uint256 _tankId
+    ) public whenNotPaused nonReentrant {
+        address msgSender = _msgSender();
+        
+        Rent memory info = rents[_tankId];
+
+        require(
+            info.owner != address(0) && info.renter == address(0),
+            "TankBiz: Tank not for renting or already rented"
+        );
+
+        require(info.owner != msgSender, "TankBiz: owner can not rent");
+
+        rents[_tankId] = Rent(
+            info.owner,
+            msgSender,
+            info.percentOwner,
+            info.percentRenter
+        );
+
+        emit RentAccepted(
+            address(tank),
+            _tankId,
+            msgSender
+        );
+    }
+
+    function cancelRent(uint256 _tankId) public whenNotPaused nonReentrant {
         address msgSender = _msgSender();
 
-        Rent memory info = rents[_tokenId];
+        Rent memory info = rents[_tankId];
 
         require(
             info.owner != address(0),
-            "TankBiz: can not cancel rent if erc721 not rented yet"
+            "TankBiz: tank not rented yet"
         );
 
         require(
             info.owner == msgSender,
-            "TankBiz: can not cancel rent if sender has not made one"
+            "TankBiz: only owner can cancel rent"
         );
 
-        emit RentCanceled(address(tank), _tokenId, msgSender, info.renter);
+        address nftOwner = tank.ownerOf(_tankId);
+        
+        if (nftOwner == address(this)) {
+            tank.transferFrom(address(this), msgSender, _tankId);
+        }
 
-        delete rents[_tokenId];
+        emit RentCanceled(address(tank), _tankId, msgSender, info.renter);
+
+        delete rents[_tankId];
     }
 
     function isRenting(address _erc721, uint256 _tokenId)
