@@ -41,7 +41,7 @@ contract TankBiz is
 
     event RentCreated(
         address erc721,
-        uint256 tankId,
+        uint256 tokenId,
         address owner,
         address renter,
         uint256 percentOwner,
@@ -50,14 +50,8 @@ contract TankBiz is
 
     event RentCanceled(
         address erc721,
-        uint256 tankId,
+        uint256 tokenId,
         address owner,
-        address renter
-    );
-
-    event RentAccepted(
-        address erc721,
-        uint256 tankId,
         address renter
     );
 
@@ -437,17 +431,17 @@ contract TankBiz is
         emit ClaimReward(sender, _amount, _claimId);
     }
 
-    function setRent(
-        uint256 _tankId,
+    function rent(
+        uint256 _tokenId,
         address _renter,
         uint256 _percentOwner,
         uint256 _percentRenter
     ) public whenNotPaused nonReentrant {
         address msgSender = _msgSender();
 
-        address nftOwner = tank.ownerOf(_tankId);
+        address nftOwner = tank.ownerOf(_tokenId);
 
-        require(nftOwner == msgSender, "TankBiz: only owner can set rent");
+        require(nftOwner == msgSender, "TankBiz: can not rent");
 
         require(
             nftOwner != _renter,
@@ -469,16 +463,14 @@ contract TankBiz is
             "TankBiz: can not rent if total percent difference 100%"
         );
 
-        Rent memory info = rents[_tankId];
+        Rent memory info = rents[_tokenId];
 
         require(
             info.owner == address(0),
             "TankBiz: can not rent if erc721 already rented"
         );
 
-        tank.transferFrom(msgSender, address(this), _tankId);
-
-        rents[_tankId] = Rent(
+        rents[_tokenId] = Rent(
             msgSender,
             _renter,
             _percentOwner,
@@ -487,7 +479,7 @@ contract TankBiz is
 
         emit RentCreated(
             address(tank),
-            _tankId,
+            _tokenId,
             msgSender,
             _renter,
             _percentOwner,
@@ -495,58 +487,24 @@ contract TankBiz is
         );
     }
 
-    function acceptRent(
-        uint256 _tankId
-    ) public whenNotPaused nonReentrant {
-        address msgSender = _msgSender();
-        
-        Rent memory info = rents[_tankId];
-
-        require(
-            info.owner != address(0) && info.renter == address(0),
-            "TankBiz: Tank not for renting or already rented"
-        );
-
-        require(info.owner != msgSender, "TankBiz: owner can not rent");
-
-        rents[_tankId] = Rent(
-            info.owner,
-            msgSender,
-            info.percentOwner,
-            info.percentRenter
-        );
-
-        emit RentAccepted(
-            address(tank),
-            _tankId,
-            msgSender
-        );
-    }
-
-    function cancelRent(uint256 _tankId) public whenNotPaused nonReentrant {
+    function cancelRent(uint256 _tokenId) public whenNotPaused nonReentrant {
         address msgSender = _msgSender();
 
-        Rent memory info = rents[_tankId];
+        Rent memory info = rents[_tokenId];
 
         require(
             info.owner != address(0),
-            "TankBiz: tank not rented yet"
+            "TankBiz: can not cancel rent if erc721 not rented yet"
         );
 
         require(
             info.owner == msgSender,
-            "TankBiz: only owner can cancel rent"
+            "TankBiz: can not cancel rent if sender has not made one"
         );
 
-        address nftOwner = tank.ownerOf(_tankId);
-        
-        if (nftOwner == address(this)) {
-            tank.transferFrom(address(this), msgSender, _tankId);
-        }
+        emit RentCanceled(address(tank), _tokenId, msgSender, info.renter);
 
-        emit RentCanceled(address(tank), _tankId, msgSender, info.renter);
-
-        delete rents[_tankId];
+        delete rents[_tokenId];
     }
 
     function isRenting(address _erc721, uint256 _tokenId)
@@ -792,6 +750,51 @@ contract TankBiz is
         emit FixTank(sender, _tankId, _erc20, priceFixTank[_erc20], _fixId);
 
         _fixTankId[_fixId] = true;
+    }
+
+    function fixListTank(
+        address _erc20,
+        uint256[] calldata _tankIds,
+        string[] calldata _fixIds
+    ) external nonReentrant whenNotPaused erc20PayFixTankWhitelist(_erc20) {
+        address sender = _msgSender();
+
+        uint256 length = _tankIds.length;
+
+        require(
+            length > 0 && length == _fixIds.length,
+            "TankBiz: Array invalid"
+        );
+
+        for (uint256 i = 0; i < length; i++) {
+            require(!_fixTankId[_fixIds[i]], "TankBiz: Transaction Executed");
+
+            address tokenOwner = tank.ownerOf(_tankIds[i]);
+            Rent memory info = rents[_tankIds[i]];
+            if (info.owner != address(0)) {
+                require(
+                    sender == info.owner || sender == info.renter,
+                    "TankBiz: Caller invalid"
+                );
+            } else {
+                require(sender == tokenOwner, "TankBiz: Must be token owner");
+            }
+        }
+
+        uint256 totalAmount = priceFixTank[_erc20] * length;
+
+        IERC20(_erc20).safeTransferFrom(sender, treasuryWallet, totalAmount);
+
+        for (uint256 i = 0; i < length; i++) {
+            _fixTankId[_fixIds[i]] = true;
+            emit FixTank(
+                sender,
+                _tankIds[i],
+                _erc20,
+                priceFixTank[_erc20],
+                _fixIds[i]
+            );
+        }
     }
 
     function getRemainQuota() external view returns (uint256) {
