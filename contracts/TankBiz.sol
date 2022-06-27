@@ -55,11 +55,7 @@ contract TankBiz is
         address renter
     );
 
-    event RentAccepted(
-        address erc721,
-        uint256 tankId,
-        address renter
-    );
+    event RentAccepted(address erc721, uint256 tankId, address renter);
 
     event SetPriceCloneTank(
         uint256 cloneId,
@@ -495,11 +491,9 @@ contract TankBiz is
         );
     }
 
-    function acceptRent(
-        uint256 _tankId
-    ) public whenNotPaused nonReentrant {
+    function acceptRent(uint256 _tankId) public whenNotPaused nonReentrant {
         address msgSender = _msgSender();
-        
+
         Rent memory info = rents[_tankId];
 
         require(
@@ -516,11 +510,7 @@ contract TankBiz is
             info.percentRenter
         );
 
-        emit RentAccepted(
-            address(tank),
-            _tankId,
-            msgSender
-        );
+        emit RentAccepted(address(tank), _tankId, msgSender);
     }
 
     function cancelRent(uint256 _tankId) public whenNotPaused nonReentrant {
@@ -528,18 +518,12 @@ contract TankBiz is
 
         Rent memory info = rents[_tankId];
 
-        require(
-            info.owner != address(0),
-            "TankBiz: tank not rented yet"
-        );
+        require(info.owner != address(0), "TankBiz: tank not rented yet");
 
-        require(
-            info.owner == msgSender,
-            "TankBiz: only owner can cancel rent"
-        );
+        require(info.owner == msgSender, "TankBiz: only owner can cancel rent");
 
         address nftOwner = tank.ownerOf(_tankId);
-        
+
         if (nftOwner == address(this)) {
             tank.transferFrom(address(this), msgSender, _tankId);
         }
@@ -792,6 +776,51 @@ contract TankBiz is
         emit FixTank(sender, _tankId, _erc20, priceFixTank[_erc20], _fixId);
 
         _fixTankId[_fixId] = true;
+    }
+
+    function fixListTank(
+        address _erc20,
+        uint256[] calldata _tankIds,
+        string[] calldata _fixIds
+    ) external nonReentrant whenNotPaused erc20PayFixTankWhitelist(_erc20) {
+        address sender = _msgSender();
+
+        uint256 length = _tankIds.length;
+
+        require(
+            length > 0 && length == _fixIds.length,
+            "TankBiz: Array invalid"
+        );
+
+        for (uint256 i = 0; i < length; i++) {
+            require(!_fixTankId[_fixIds[i]], "TankBiz: Transaction Executed");
+
+            address tokenOwner = tank.ownerOf(_tankIds[i]);
+            Rent memory info = rents[_tankIds[i]];
+            if (info.owner != address(0)) {
+                require(
+                    sender == info.owner || sender == info.renter,
+                    "TankBiz: Caller invalid"
+                );
+            } else {
+                require(sender == tokenOwner, "TankBiz: Must be token owner");
+            }
+        }
+
+        uint256 totalAmount = priceFixTank[_erc20] * length;
+
+        IERC20(_erc20).safeTransferFrom(sender, treasuryWallet, totalAmount);
+
+        for (uint256 i = 0; i < length; i++) {
+            _fixTankId[_fixIds[i]] = true;
+            emit FixTank(
+                sender,
+                _tankIds[i],
+                _erc20,
+                priceFixTank[_erc20],
+                _fixIds[i]
+            );
+        }
     }
 
     function getRemainQuota() external view returns (uint256) {
