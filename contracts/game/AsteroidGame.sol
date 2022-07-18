@@ -618,6 +618,7 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
             winnerReward = asteroid.reward * asteroid.winnerRewardPercent / HUNDRED_PERCENT;
             winnerReward = winnerReward - (winnerReward * asteroid.shootingWeight / HUNDRED_PERCENT);
 
+            // totalPrizes always is 0 after upgrade to new logic
             if (asteroid.totalPrizes > 0) {
                 winnerRewards[0] = winnerReward / 3; // 3 is total prizes
                 winnerRewards[1] = winnerRewards[0];
@@ -650,7 +651,6 @@ contract AsteroidGame is AccessControlEnumerableUpgradeable, PausableUpgradeable
         for (uint256 i = 0; i < winners.length; i++) {
             if (winners[i] == _account) {
                 reward += winnerRewards[i];
-                break;
             }
         }
 
