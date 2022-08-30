@@ -117,6 +117,14 @@ contract TankBiz is
         string fixTankId
     );
 
+    event DelegateTank(
+        address user,
+        uint256 tankId,
+        address erc20,
+        uint256 fee,
+        string sessionId
+    );
+
     // ------ Struct ---------------
 
     struct Rent {
@@ -195,6 +203,10 @@ contract TankBiz is
 
     bool public verifyQuota;
 
+    mapping(address => uint256) public priceDelegateTank;
+
+    mapping(string => bool) private _delegateTankId;
+
     modifier onlyAdmin() {
         require(
             hasRole(DEFAULT_ADMIN_ROLE, _msgSender()),
@@ -219,6 +231,14 @@ contract TankBiz is
     modifier erc20PayFixTankWhitelist(address _erc20) {
         require(
             priceFixTank[_erc20] > 0,
+            "TankBiz: Erc20 must be in whitelist"
+        );
+        _;
+    }
+
+    modifier erc20PayDelegateTankWhitelist(address _erc20) {
+        require(
+            priceDelegateTank[_erc20] > 0,
             "TankBiz: Erc20 must be in whitelist"
         );
         _;
@@ -386,6 +406,17 @@ contract TankBiz is
 
     function removePriceFixTank(address _erc20) external onlyOperator {
         delete priceFixTank[_erc20];
+    }
+
+    function setPriceDelegateTank(address _erc20, uint256 _price)
+        external
+        onlyOperator
+    {
+        priceDelegateTank[_erc20] = _price;
+    }
+
+    function removePriceDelegateTank(address _erc20) external onlyOperator {
+        delete priceDelegateTank[_erc20];
     }
 
     function claimReward(
@@ -746,38 +777,6 @@ contract TankBiz is
         return cloneTankPrices[_cloneId].length;
     }
 
-    function fixTank(
-        address _erc20,
-        uint256 _tankId,
-        string calldata _fixId
-    ) external nonReentrant whenNotPaused erc20PayFixTankWhitelist(_erc20) {
-        require(!_fixTankId[_fixId], "TankBiz: Transaction Executed");
-
-        address sender = _msgSender();
-        address tokenOwner = tank.ownerOf(_tankId);
-
-        Rent memory info = rents[_tankId];
-
-        if (info.owner != address(0)) {
-            require(
-                sender == info.owner || sender == info.renter,
-                "TankBiz: Caller invalid"
-            );
-        } else {
-            require(sender == tokenOwner, "TankBiz: Must be token owner");
-        }
-
-        IERC20(_erc20).safeTransferFrom(
-            sender,
-            treasuryWallet,
-            priceFixTank[_erc20]
-        );
-
-        emit FixTank(sender, _tankId, _erc20, priceFixTank[_erc20], _fixId);
-
-        _fixTankId[_fixId] = true;
-    }
-
     function fixListTank(
         address _erc20,
         uint256[] calldata _tankIds,
@@ -819,6 +818,59 @@ contract TankBiz is
                 _erc20,
                 priceFixTank[_erc20],
                 _fixIds[i]
+            );
+        }
+    }
+
+    function delegateTank(
+        address _erc20,
+        uint256[] calldata _tankIds,
+        string[] calldata _sessionIds
+    )
+        external
+        nonReentrant
+        whenNotPaused
+        erc20PayDelegateTankWhitelist(_erc20)
+    {
+        address sender = _msgSender();
+
+        uint256 length = _tankIds.length;
+
+        require(
+            length > 0 && length == _sessionIds.length,
+            "TankBiz: Array invalid"
+        );
+
+        for (uint256 i = 0; i < length; i++) {
+            require(
+                !_delegateTankId[_sessionIds[i]],
+                "TankBiz: Transaction Executed"
+            );
+
+            address tokenOwner = tank.ownerOf(_tankIds[i]);
+            Rent memory info = rents[_tankIds[i]];
+            if (info.owner != address(0)) {
+                require(
+                    sender == info.owner || sender == info.renter,
+                    "TankBiz: Caller invalid"
+                );
+            } else {
+                require(sender == tokenOwner, "TankBiz: Must be token owner");
+            }
+        }
+
+        uint256 totalAmount = priceDelegateTank[_erc20] * length;
+
+        IERC20(_erc20).safeTransferFrom(sender, treasuryWallet, totalAmount);
+
+        for (uint256 i = 0; i < length; i++) {
+            _delegateTankId[_sessionIds[i]] = true;
+            emit DelegateTank(
+                sender,
+                _tankIds[i],
+                _erc20,
+                priceDelegateTank[_erc20],
+                _sessionIds[i]
             );
         }
     }
